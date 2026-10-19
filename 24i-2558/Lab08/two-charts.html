@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Task 2 Dashboard · Penguins</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: sans-serif; background: #f4f6f8; color: #222; }
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px;
+    background: #1f2d3d; color: #fff;
+    display: flex; align-items: center; gap: 10px; padding: 0 24px;
+  }
+  nav .brand { font-weight: bold; margin-right: auto; }
+  nav button {
+    background: #34495e; color: #fff; border: none;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  nav button:hover { background: #46627f; }
+  nav button.active { background: #e74c3c; }
+  main { margin-top: 80px; padding: 0 24px; display: flex; justify-content: center; }
+  .card { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.08); width: 680px; }
+  .card p { color: #555; margin-top: 4px; }
+  .hint { font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">Task 2 · Two Charts</span>
+  <button data-choice="1" class="active">1 · Body mass</button>
+  <button data-choice="2">2 · Penguins per island</button>
+  <button data-choice="3">3 · Both charts</button>
+</nav>
+
+<main>
+  <div class="card">
+    <h2 id="title"></h2>
+    <p id="caption"></p>
+    <div id="charts"></div>
+    <p class="hint">Press 1, 2 or 3 on the keyboard to switch.</p>
+  </div>
+</main>
+
+<script>
+/*
+  TASK 2 GOAL
+  Two charts on one page: body mass by species, and penguins per island.
+  Chart 1 should show 3 species bars. Chart 2 should show 3 island bars.
+
+  TASK 2, DEBUGGING (Console tab)
+  Q: What did the Console say? What does it mean?
+  A: Typically "SyntaxError: Identifier 'margin' has already been declared".
+     Both <script> blocks share one global scope, so a repeated const name
+     stops the second script from running at all.
+
+  TASK 2, DEBUGGING (Network tab)
+  Q: The Network tab was fine. What does that tell you?
+  A: d3.v7.min.js and penguins.csv loaded with status 200. The file paths and
+     library are correct, so the fault is in the JavaScript.
+
+  TASK 2, DEBUGGING (Elements tab)
+  Q: What did Elements show that the Console did not?
+  A: Where the shapes actually ended up. The second chart's bars are missing
+     or drawn inside the first <svg>.
+
+  TASK 2, FIX
+  Q: What did you change to fix it?
+  A: Wrapped each chart in its own (() => { ... })(); block and gave each SVG
+     its own ID (chart1, chart2). Expected counts: Biscoe 163, Dream 123,
+     Torgersen 47.
+*/
+
+const views = {
+  1: {
+    title: "Average body mass by species",
+    caption: "Gentoo is the heaviest species, so its bar is red.",
+    charts: [
+      {
+        group: "species",
+        valueFn: rows => d3.mean(rows, d => d.body_mass_g),
+        yLabel: "Mean body mass (g)",
+        highlight: true
+      }
+    ]
+  },
+  2: {
+    title: "Number of penguins per island",
+    caption: "Biscoe has the most penguins (163), then Dream (123) and Torgersen (47).",
+    charts: [
+      {
+        group: "island",
+        valueFn: rows => rows.length,
+        yLabel: "Number of penguins",
+        highlight: false
+      }
+    ]
+  },
+  3: {
+    title: "Both charts on one page",
+    caption: "Body mass by species on top, penguin count per island below.",
+    charts: [
+      {
+        group: "species",
+        valueFn: rows => d3.mean(rows, d => d.body_mass_g),
+        yLabel: "Mean body mass (g)",
+        highlight: true,
+        height: 300
+      },
+      {
+        group: "island",
+        valueFn: rows => rows.length,
+        yLabel: "Number of penguins",
+        highlight: false,
+        height: 300
+      }
+    ]
+  }
+};
+
+let data = [];
+
+function drawBar(container, chart) {
+  const width = 640, height = chart.height || 340;
+  const m = { top: 30, right: 20, bottom: 50, left: 80 };
+  const iw = width - m.left - m.right;
+  const ih = height - m.top - m.bottom;
+
+  const summary = Array.from(
+    d3.rollup(data, chart.valueFn, d => d[chart.group]),
+    ([key, value]) => ({ key, value })
+  );
+  const maxValue = d3.max(summary, d => d.value);
+
+  const svg = container.append("svg").attr("width", width).attr("height", height);
+  const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
+
+  const x = d3.scaleBand().domain(summary.map(d => d.key)).range([0, iw]).padding(0.3);
+  const y = d3.scaleLinear().domain([0, maxValue * 1.1]).range([ih, 0]);
+
+  g.append("g").attr("transform", `translate(0,${ih})`).call(d3.axisBottom(x));
+  g.append("g").call(d3.axisLeft(y));
+
+  g.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -ih / 2).attr("y", -60)
+    .attr("text-anchor", "middle")
+    .text(chart.yLabel);
+
+  g.selectAll("rect")
+    .data(summary)
+    .join("rect")
+    .attr("x", d => x(d.key))
+    .attr("y", d => y(d.value))
+    .attr("width", x.bandwidth())
+    .attr("height", d => ih - y(d.value))
+    .attr("fill", d => {
+      if (!chart.highlight) return "steelblue";
+      return d.value === maxValue ? "red" : "blue";
+    });
+}
+
+function show(choice) {
+  const view = views[choice];
+  d3.selectAll("nav button").classed("active", function () {
+    return +this.dataset.choice === choice;
+  });
+  d3.select("#title").text(view.title);
+  d3.select("#caption").text(view.caption);
+  const box = d3.select("#charts");
+  box.selectAll("*").remove();
+  view.charts.forEach(chart => drawBar(box, chart));
+}
+
+d3.selectAll("nav button").on("click", function () {
+  show(+this.dataset.choice);
+});
+
+document.addEventListener("keydown", e => {
+  if (views[e.key]) show(+e.key);
+});
+
+d3.csv("dataset/penguins.csv", d3.autoType).then(d => {
+  data = d;
+  show(1);
+});
+</script>
+</body>
+</html>

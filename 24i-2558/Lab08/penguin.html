@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Task 1 Dashboard · Penguins</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: sans-serif; background: #f4f6f8; color: #222; }
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; height: 56px;
+    background: #1f2d3d; color: #fff;
+    display: flex; align-items: center; gap: 10px; padding: 0 24px;
+  }
+  nav .brand { font-weight: bold; margin-right: auto; }
+  nav button {
+    background: #34495e; color: #fff; border: none;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  nav button:hover { background: #46627f; }
+  nav button.active { background: #e74c3c; }
+  main { margin-top: 80px; padding: 0 24px; display: flex; justify-content: center; }
+  .card { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,.08); width: 680px; }
+  .card p { color: #555; margin-top: 4px; }
+  .hint { font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="brand">Task 1 · Antarctic Penguins</span>
+  <button data-choice="1" class="active">1 · Body mass</button>
+  <button data-choice="2">2 · Flipper length</button>
+  <button data-choice="3">3 · By island</button>
+</nav>
+
+<main>
+  <div class="card">
+    <h2 id="title"></h2>
+    <p id="caption"></p>
+    <div id="chart"></div>
+    <p class="hint">Press 1, 2 or 3 on the keyboard to switch.</p>
+  </div>
+</main>
+
+<script>
+/*
+  TASK 1, STEP 1 (Predict first)
+  Which species is heaviest? Gentoo (mean about 5092 g).
+  Adelie is about 3706 g and Chinstrap about 3733 g.
+
+  TASK 1, STEP 2 (Highlight)
+  Gentoo's bar is red and the other two are blue.
+
+  TASK 1, STEP 3 (Flipper length)
+  Gentoo is the tallest again (about 217 mm), so the answer to the manager's
+  question is yes, Gentoo also has the longest flippers.
+
+  TASK 1, STEP 4 (Island)
+  Which island has the heaviest penguins? Biscoe (mean about 4719 g).
+  Dream is about 3719 g and Torgersen about 3709 g.
+
+  TASK 1, STEP 5 (Explain it back)
+  Q1: Which line decides how tall each bar is?
+      The height line, .attr("height", d => innerHeight - y(d.value)).
+      The y scale maps each value to a pixel position, and the height runs
+      from that position to the bottom of the chart.
+
+  Q2: What happens if I change .range([innerHeight, 0]) to .range([0, innerHeight])?
+      The scale flips, so zero sits at the top. The bar heights invert, and the
+      heaviest species gets the shortest bar. The chart still looks valid, which
+      is why this mistake is easy to miss.
+
+  Q3: How many <rect> elements are in the page, and why?
+      Three, one per species. D3 makes one shape per data row. The axes are
+      drawn with lines and text, so they add no rectangles.
+*/
+
+const views = {
+  1: {
+    title: "Average body mass by species",
+    caption: "Gentoo is the heaviest species, so its bar is red.",
+    group: "species",
+    valueFn: rows => d3.mean(rows, d => d.body_mass_g),
+    yLabel: "Mean body mass (g)"
+  },
+  2: {
+    title: "Average flipper length by species",
+    caption: "Gentoo also has the longest flippers, so the answer to the manager is yes.",
+    group: "species",
+    valueFn: rows => d3.mean(rows, d => d.flipper_length_mm),
+    yLabel: "Mean flipper length (mm)"
+  },
+  3: {
+    title: "Average body mass by island",
+    caption: "Biscoe has the heaviest penguins on average.",
+    group: "island",
+    valueFn: rows => d3.mean(rows, d => d.body_mass_g),
+    yLabel: "Mean body mass (g)"
+  }
+};
+
+let data = [];
+
+function drawBar(container, view) {
+  const width = 640, height = 380;
+  const m = { top: 30, right: 20, bottom: 50, left: 80 };
+  const iw = width - m.left - m.right;
+  const ih = height - m.top - m.bottom;
+
+  const summary = Array.from(
+    d3.rollup(data, view.valueFn, d => d[view.group]),
+    ([key, value]) => ({ key, value })
+  );
+  const maxValue = d3.max(summary, d => d.value);
+
+  const svg = container.append("svg").attr("width", width).attr("height", height);
+  const g = svg.append("g").attr("transform", `translate(${m.left},${m.top})`);
+
+  const x = d3.scaleBand().domain(summary.map(d => d.key)).range([0, iw]).padding(0.3);
+  const y = d3.scaleLinear().domain([0, maxValue * 1.1]).range([ih, 0]);
+
+  g.append("g").attr("transform", `translate(0,${ih})`).call(d3.axisBottom(x));
+  g.append("g").call(d3.axisLeft(y));
+
+  g.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -ih / 2).attr("y", -60)
+    .attr("text-anchor", "middle")
+    .text(view.yLabel);
+
+  g.selectAll("rect")
+    .data(summary)
+    .join("rect")
+    .attr("x", d => x(d.key))
+    .attr("y", d => y(d.value))
+    .attr("width", x.bandwidth())
+    .attr("height", d => ih - y(d.value))
+    .attr("fill", d => d.value === maxValue ? "red" : "blue");
+}
+
+function show(choice) {
+  const view = views[choice];
+  d3.selectAll("nav button").classed("active", function () {
+    return +this.dataset.choice === choice;
+  });
+  d3.select("#title").text(view.title);
+  d3.select("#caption").text(view.caption);
+  const box = d3.select("#chart");
+  box.selectAll("*").remove();
+  drawBar(box, view);
+}
+
+d3.selectAll("nav button").on("click", function () {
+  show(+this.dataset.choice);
+});
+
+document.addEventListener("keydown", e => {
+  if (views[e.key]) show(+e.key);
+});
+
+d3.csv("dataset/penguins.csv", d3.autoType).then(d => {
+  data = d;
+  show(1);
+});
+</script>
+</body>
+</html>
