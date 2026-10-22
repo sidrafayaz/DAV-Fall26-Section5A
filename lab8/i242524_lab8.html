@@ -1,0 +1,332 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 8 - Data Analysis and Visualization</title>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 25px;
+            background-color: #f5f7fa;
+            color: #222;
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 25px auto;
+            max-width: 950px;
+            border-radius: 10px;
+        }
+
+        .buttons {
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: steelblue;
+            color: white;
+        }
+
+        button:hover {
+            background: #244f70;
+        }
+
+        svg {
+            display: block;
+            margin: 15px auto;
+            max-width: 100%;
+        }
+
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Lab Manual 8: Penguin Data Visualization</h1>
+
+<!-- TASK 1 -->
+<div class="section">
+    <h2>Task 1: Penguin Analysis</h2>
+
+    <p>
+        This chart compares penguin species and islands using body mass
+        and flipper length.
+    </p>
+
+    <div class="buttons">
+        <button onclick="drawTask1('mass')">
+            Body Mass by Species
+        </button>
+
+        <button onclick="drawTask1('flipper')">
+            Flipper Length by Species
+        </button>
+
+        <button onclick="drawTask1('island')">
+            Body Mass by Island
+        </button>
+    </div>
+
+    <svg id="chart1" width="800" height="450"></svg>
+    <p id="chart1Error" class="error"></p>
+</div>
+
+<!-- TASK 2 -->
+<div class="section">
+    <h2>Task 2: Two Charts on One Page</h2>
+
+    <h3>Average Body Mass by Species</h3>
+    <svg id="chart2" width="800" height="400"></svg>
+
+    <h3>Number of Penguins per Island</h3>
+    <svg id="chart3" width="800" height="400"></svg>
+    <p id="chart2Error" class="error"></p>
+</div>
+
+<script>
+const margin = {
+    top: 40,
+    right: 30,
+    bottom: 70,
+    left: 80
+};
+
+const width = 800;
+const height = 400;
+
+const innerWidth = width - margin.left - margin.right;
+const innerHeight = height - margin.top - margin.bottom;
+
+let penguins = [];
+
+// Load the dataset once for all three charts
+d3.csv("penguins.csv", d3.autoType)
+    .then(data => {
+
+        // Remove rows missing the values needed by our charts
+        penguins = data.filter(d =>
+            d.species &&
+            d.island &&
+            Number.isFinite(d.body_mass_g) &&
+            Number.isFinite(d.flipper_length_mm)
+        );
+
+        if (penguins.length === 0) {
+            throw new Error(
+                "No valid rows found. Check the CSV column names."
+            );
+        }
+
+        // Draw the default Task 1 chart
+        drawTask1("mass");
+
+        // Draw both Task 2 charts
+        drawTask2();
+
+    })
+    .catch(error => {
+        console.error(error);
+
+        document.getElementById("chart1Error").textContent =
+            "Could not load the dataset. Check the CSV path and column names.";
+
+        document.getElementById("chart2Error").textContent =
+            "Dataset loading failed. Open the browser Console for details.";
+    });
+
+
+// TASK 1: Draw a selected chart
+function drawTask1(type) {
+
+    if (penguins.length === 0) return;
+
+    let grouped;
+    let title;
+    let highlight;
+
+    if (type === "mass") {
+
+        grouped = Array.from(
+            d3.rollup(
+                penguins,
+                v => d3.mean(v, d => d.body_mass_g),
+                d => d.species
+            ),
+            ([name, value]) => ({name, value})
+        );
+
+        title = "Average Body Mass by Species (g)";
+        highlight = "Gentoo";
+
+    } else if (type === "flipper") {
+
+        grouped = Array.from(
+            d3.rollup(
+                penguins,
+                v => d3.mean(v, d => d.flipper_length_mm),
+                d => d.species
+            ),
+            ([name, value]) => ({name, value})
+        );
+
+        title = "Average Flipper Length by Species (mm)";
+        highlight = "Gentoo";
+
+    } else {
+
+        grouped = Array.from(
+            d3.rollup(
+                penguins,
+                v => d3.mean(v, d => d.body_mass_g),
+                d => d.island
+            ),
+            ([name, value]) => ({name, value})
+        );
+
+        title = "Average Body Mass by Island (g)";
+        highlight = "Biscoe";
+    }
+
+    drawBarChart(
+        "#chart1",
+        grouped,
+        title,
+        highlight
+    );
+}
+
+
+// TASK 2: Prepare both datasets and draw both charts
+function drawTask2() {
+
+    // Average body mass for each species
+    const speciesData = Array.from(
+        d3.rollup(
+            penguins,
+            v => d3.mean(v, d => d.body_mass_g),
+            d => d.species
+        ),
+        ([name, value]) => ({name, value})
+    );
+
+    // Count penguins on each island
+    const islandData = Array.from(
+        d3.rollup(
+            penguins,
+            v => v.length,
+            d => d.island
+        ),
+        ([name, value]) => ({name, value})
+    );
+
+    drawBarChart(
+        "#chart2",
+        speciesData,
+        "Average Body Mass (g)",
+        "Gentoo"
+    );
+
+    drawBarChart(
+        "#chart3",
+        islandData,
+        "Number of Penguins",
+        null
+    );
+}
+
+
+// Reusable function to draw a bar chart
+function drawBarChart(svgId, data, title, highlight) {
+
+    const svg = d3.select(svgId);
+
+    // Clear any previous chart in this SVG
+    svg.selectAll("*").remove();
+
+    const chart = svg.append("g")
+        .attr(
+            "transform",
+            `translate(${margin.left},${margin.top})`
+        );
+
+    const x = d3.scaleBand()
+        .domain(data.map(d => d.name))
+        .range([0, innerWidth])
+        .padding(0.25);
+
+    const maxValue = d3.max(data, d => d.value);
+
+    const y = d3.scaleLinear()
+        .domain([0, maxValue * 1.1])
+        .range([innerHeight, 0]);
+
+    // X axis
+    chart.append("g")
+        .attr(
+            "transform",
+            `translate(0,${innerHeight})`
+        )
+        .call(d3.axisBottom(x));
+
+    // Y axis
+    chart.append("g")
+        .call(d3.axisLeft(y));
+
+    // Bars
+    chart.selectAll("rect")
+        .data(data)
+        .join("rect")
+        .attr("x", d => x(d.name))
+        .attr("y", d => y(d.value))
+        .attr("width", x.bandwidth())
+        .attr(
+            "height",
+            d => innerHeight - y(d.value)
+        )
+        .attr("fill", d =>
+            highlight && d.name === highlight
+                ? "red"
+                : "steelblue"
+        );
+
+    // Chart title
+    chart.append("text")
+        .attr("x", innerWidth / 2)
+        .attr("y", -15)
+        .attr("text-anchor", "middle")
+        .style("font-size", "17px")
+        .style("font-weight", "bold")
+        .text(title);
+
+    // Y-axis label
+    chart.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -55)
+        .attr("text-anchor", "middle")
+        .style("font-size", "12px")
+        .text(title);
+}
+</script>
+
+</body>
+</html>
