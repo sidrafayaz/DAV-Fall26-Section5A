@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>University Enrollment & Structure</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 32px 16px 48px;
+            background: #ece6f7;            /* light purple */
+            color: #222;
+            display: flex;
+            flex-direction: column;
+            align-items: center;            /* center everything */
+        }
+        section {
+            width: 100%;
+            max-width: 1440px;
+            margin-bottom: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        h1 { margin: 0 0 4px; font-size: 24px; }
+        .subtitle { margin: 0 0 16px; color: #666; font-size: 14px; }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+        .legend-swatch.round { border-radius: 50%; }
+        svg.chart { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(80, 50, 140, .18); }
+
+        /* ---------- Layout: sticky notes | chart | sticky notes ---------- */
+        .stage {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 28px;
+            width: 100%;
+        }
+        .chart-col { display: flex; flex-direction: column; align-items: center; flex: none; }
+        .notes {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            width: 190px;
+            flex: none;
+            padding-top: 12px;
+        }
+
+        /* ---------- Sticky notes ---------- */
+        .note {
+            position: relative;
+            padding: 20px 14px 14px;
+            font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", "Comic Neue", cursive;
+            font-size: 13px;
+            line-height: 1.45;
+            text-align: left;
+            color: #3a3a3a;
+            background: #fff59d;
+            border-radius: 2px;
+            box-shadow: 2px 4px 10px rgba(60, 40, 100, .25);
+            transform: rotate(-1.8deg);
+        }
+        .note::before {                      /* little piece of tape */
+            content: "";
+            position: absolute;
+            top: -8px; left: 50%;
+            width: 54px; height: 16px;
+            transform: translateX(-50%) rotate(2deg);
+            background: rgba(255, 255, 255, .55);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+        }
+        .note b { display: block; margin-bottom: 4px; font-size: 12px; letter-spacing: .4px; text-transform: uppercase; color: #6a4fa3; }
+        .note code { font-family: Consolas, "Courier New", monospace; font-size: 12px; background: rgba(255,255,255,.55); padding: 0 3px; border-radius: 3px; }
+        .note.pink  { background: #f8bbd9; transform: rotate(1.6deg); }
+        .note.blue  { background: #b3e5fc; transform: rotate(-1deg); }
+        .note.green { background: #c8e6c9; transform: rotate(2deg); }
+        .note.peach { background: #ffe0b2; transform: rotate(-2.2deg); }
+
+        @media (max-width: 1460px) {          /* not enough room for side notes: put them under the chart */
+            .stage { flex-direction: column; align-items: center; }
+            .notes { order: 1; flex-direction: row; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 1000px; }
+            .notes .note { width: 190px; }
+        }
+
+        /* Task 1 */
+        .cell rect { stroke: #fff; stroke-width: 1.5px; }
+        .cell text { font-size: 12px; fill: #fff; pointer-events: none; text-anchor: start; }
+
+        /* Task 2 */
+        .link { fill: none; stroke: #b39ddb; stroke-width: 1.5px; }
+        .node circle { stroke: #fff; stroke-width: 1.5px; }
+        .node.dept circle { cursor: pointer; }
+        .node text { font-size: 12px; fill: #222; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+
+        /* Task 3 */
+        .route { stroke: #7e57c2; stroke-linecap: round; transition: opacity .15s; }
+        .city circle { fill: #26a69a; stroke: #fff; stroke-width: 2px; cursor: grab; transition: opacity .15s; }
+        .city:active circle { cursor: grabbing; }
+        .city text { font-size: 12px; font-weight: 600; fill: #222; pointer-events: none; text-anchor: middle;
+                     paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; transition: opacity .15s; }
+        .faded { opacity: .1; }
+        .city circle.active { fill: #e67e22; }
+
+        /* Task 4 */
+        .country { stroke: #fff; stroke-width: .4px; transition: fill .15s; }
+        .country.nodata { fill: #e0e0e0; }
+        .country.hovered { stroke: #111; stroke-width: 1.6px; }
+
+        /* Task 5 & 6 */
+        .land { fill: #eceff1; stroke: #fff; stroke-width: .8px; }
+        .land.pak { fill: #ddd3f0; stroke: #9575cd; stroke-width: 1.2px; }
+        .city-dot { stroke-width: 1.2px; transition: opacity .15s; cursor: pointer; }
+        .city-label { font-size: 12px; font-weight: 600; fill: #222; pointer-events: none; text-anchor: middle;
+                      paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; transition: opacity .15s; }
+        .air-route { fill: none; stroke: #7e57c2; stroke-linecap: round; stroke-opacity: .6; transition: opacity .15s; }
+        .legend-box { fill: #fff; fill-opacity: .92; stroke: #d1c4e9; }
+        .legend-text { font-size: 12px; fill: #333; }
+        .legend-title { font-size: 12px; font-weight: 700; fill: #5e35b1; }
+
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0;
+            background: rgba(20, 20, 20, .92);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.5;
+            transition: opacity .12s;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Task 1: Course Enrollment Treemap -->
+    <section id="task1">
+        <h1>Course Enrollment by Department</h1>
+        <p class="subtitle">Task 1 &middot; Rectangle area = number of students</p>
+        <div class="stage">
+            <div class="notes">
+                <div class="note">
+                    <b>Hierarchical data</b>
+                    A treemap needs a parent &rarr; child structure, so the flat CSV rows are reshaped into
+                    University &rarr; Department &rarr; Course.
+                </div>
+                <div class="note pink">
+                    <b>The root</b>
+                    First we design a root node. Here the root is the whole <code>University</code>.
+                </div>
+            </div>
+
+            <div class="chart-col">
+                <div class="legend" id="legend"></div>
+                <svg id="chart" class="chart"></svg>
+            </div>
+
+            <div class="notes">
+                <div class="note blue">
+                    <b>sum() &amp; sort()</b>
+                    <code>sum()</code> calculates the total value of every parent node from its children.
+                    <code>sort()</code> arranges the nodes, biggest first.
+                </div>
+                <div class="note green">
+                    <b>round(true)</b>
+                    Rounds all the rectangle coordinates to whole numbers so the edges look crisp.
+                </div>
+                <div class="note peach">
+                    <b>Drawing the rectangles</b>
+                    <code>join("g")</code> creates one <code>&lt;g&gt;</code> element per course, and
+                    <code>translate</code> moves each group to its own coordinates.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task 2: University Structure Dendrogram -->
+    <section id="task2">
+        <h1>University Structure Dendrogram</h1>
+        <p class="subtitle">Task 2 &middot; Click a department to collapse or expand its courses</p>
+        <div class="stage">
+            <div class="notes">
+                <div class="note">
+                    <b>Set up first</b>
+                    First we configure the <code>svg</code>, and only then design the elements inside it.
+                </div>
+                <div class="note pink">
+                    <b>Depth colors</b>
+                    <code>0</code> &rarr; University<br>
+                    <code>1</code> &rarr; Department<br>
+                    <code>2</code> &rarr; Course
+                </div>
+            </div>
+
+            <div class="chart-col">
+                <div class="legend" id="legend2"></div>
+                <svg id="dendro" class="chart"></svg>
+            </div>
+
+            <div class="notes">
+                <div class="note blue">
+                    <b>cluster()</b>
+                    Calculates where each node should be positioned in the diagram.
+                </div>
+                <div class="note green">
+                    <b>linkHorizontal()</b>
+                    Prepares the connecting lines (the curves). We tell it which value is the horizontal
+                    and which is the vertical coordinate.
+                </div>
+                <div class="note peach">
+                    <b>Click a department</b>
+                    Its courses are stashed in <code>_children</code> when collapsed and restored on the next click.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task 3: Flight Route Network -->
+    <section id="task3">
+        <h1>Pakistan Flight Route Network</h1>
+        <p class="subtitle">Task 3 &middot; Link thickness = flights per week &middot; Circle size = number of routes &middot; Drag cities, hover to highlight routes</p>
+        <div class="stage">
+            <div class="notes">
+                <div class="note">
+                    <b>Nodes from edges</b>
+                    There is no city list in the CSV, so we build it from the <code>source</code> and
+                    <code>target</code> columns.
+                </div>
+                <div class="note pink">
+                    <b>Degree</b>
+                    A city's degree is how many routes touch it. Bigger degree = bigger circle.
+                </div>
+            </div>
+
+            <div class="chart-col">
+                <svg id="network" class="chart"></svg>
+            </div>
+
+            <div class="notes">
+                <div class="note blue">
+                    <b>Scales</b>
+                    One scale maps flights/week to link thickness, another maps degree to circle radius.
+                </div>
+                <div class="note green">
+                    <b>Force simulation</b>
+                    Links pull cities together, charge pushes them apart, so the layout settles by itself.
+                </div>
+                <div class="note peach">
+                    <b>Try it</b>
+                    Drag any city, or hover one to light up its routes while everything else fades.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task 4: World Population Choropleth -->
+    <section id="task4">
+        <h1>World Population Choropleth</h1>
+        <p class="subtitle">Task 4 &middot; Darker country = more people &middot; Hover a country for details</p>
+        <div class="stage">
+            <div class="notes">
+                <div class="note">
+                    <b>Joining the data</b>
+                    The CSV <code>id</code> (country code) is matched to each map feature's id, so every
+                    country finds its own population.
+                </div>
+                <div class="note pink">
+                    <b>Projection + path</b>
+                    The projection turns lon/lat into x/y. <code>d3.geoPath</code> then turns each country's
+                    shape into an SVG path.
+                </div>
+            </div>
+
+            <div class="chart-col">
+                <svg id="choropleth" class="chart"></svg>
+            </div>
+
+            <div class="notes">
+                <div class="note blue">
+                    <b>Square-root scale</b>
+                    A few giants (China, India) would wash out everyone else on a linear scale. The sqrt scale
+                    spreads the colors out more fairly.
+                </div>
+                <div class="note green">
+                    <b>Light gray = no data</b>
+                    Countries missing from the CSV are painted light gray instead of looking like "zero".
+                </div>
+                <div class="note peach">
+                    <b>Hover</b>
+                    The country gets a dark border and a tooltip with its name and population.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task 5: Pakistan Cities Point Map -->
+    <section id="task5">
+        <h1>Pakistan's Largest Cities</h1>
+        <p class="subtitle">Task 5 &middot; Circle area = population &middot; Labels for cities above 1 million</p>
+        <div class="stage">
+            <div class="notes">
+                <div class="note">
+                    <b>Mercator, centered</b>
+                    <code>geoMercator().center(...)</code> plus a scale zooms the map in on Pakistan.
+                </div>
+                <div class="note pink">
+                    <b>Longitude first!</b>
+                    <code>projection([lon, lat])</code> &mdash; it takes longitude then latitude, the opposite
+                    of how we usually say coordinates.
+                </div>
+            </div>
+
+            <div class="chart-col">
+                <svg id="citymap" class="chart"></svg>
+            </div>
+
+            <div class="notes">
+                <div class="note blue">
+                    <b>Area, not radius</b>
+                    People read area, so the radius uses a sqrt scale. Double the population = double the area.
+                </div>
+                <div class="note green">
+                    <b>See-through circles</b>
+                    Semi-transparent fills keep overlapping cities visible.
+                </div>
+                <div class="note peach">
+                    <b>Labels vs tooltip</b>
+                    Only cities above 1 million get a label. Hover any city, even a small one, to see it.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Task 6: Combined Spatial Encoding Map -->
+    <section id="task6">
+        <h1>Cities, Population &amp; Flight Routes</h1>
+        <p class="subtitle">Task 6 &middot; Four variables on one map &middot; Hover a city to highlight its routes</p>
+        <div class="stage">
+            <div class="notes">
+                <div class="note">
+                    <b>Matching routes</b>
+                    Each route's <code>source</code> and <code>target</code> city name is looked up in the
+                    cities file to get its coordinates.
+                </div>
+                <div class="note pink">
+                    <b>Draw order</b>
+                    Routes are drawn first and cities after, so circles sit on top of the lines.
+                </div>
+            </div>
+
+            <div class="chart-col">
+                <svg id="combined" class="chart"></svg>
+            </div>
+
+            <div class="notes">
+                <div class="note blue">
+                    <b>Four encodings</b>
+                    Position = location, size = population, color = hub or not, line width = flights per week.
+                </div>
+                <div class="note green">
+                    <b>What is a hub?</b>
+                    A city with 4 or more routes. Count comes from the flights file.
+                </div>
+                <div class="note peach">
+                    <b>Hover</b>
+                    Hover a city to light up its routes and dim everything else.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div id="tooltip"></div>
+
+    <script>
+        const tooltip = d3.select("#tooltip");
+
+        d3.csv("university.csv", d => ({
+            department: d.department.trim(),
+            course: d.course.trim(),
+            students: +d.students
+        })).then(data => {
+            // for hierarchal data we create a partent child data schema 
+            // Reshape flat rows into University -> Department -> Course
+            // grouped data 
+            const grouped = d3.group(data, d => d.department);
+            // hierarchal data
+            const hierarchyData = {
+                name: "University",
+                children: Array.from(grouped, ([dept, rows]) => ({
+                    name: dept,
+                    children: rows.map(r => ({ name: r.course, department: dept, value: r.students }))
+                }))
+            };
+            const departments = hierarchyData.children.map(d => d.name);
+            const color = d3.scaleOrdinal().domain(departments).range(d3.schemeTableau10);
+
+            drawTreemap(hierarchyData, departments, color);
+            drawDendrogram(hierarchyData);
+
+        }).catch(err => {
+            d3.select("#task1").append("p")
+                .style("color", "crimson")
+                .text("Could not load university.csv: " + err.message +
+                      " (serve this folder with a local server, e.g. `python -m http.server`).");
+        });
+
+        // Task 3 has its own dataset
+        d3.csv("flights.csv", d => ({
+            source: d.source.trim(),
+            target: d.target.trim(),
+            flights: +d.flights
+        })).then(drawNetwork).catch(err => {
+            d3.select("#task3").append("p")
+                .style("color", "crimson")
+                .text("Could not load flights.csv: " + err.message +
+                      " (serve this folder with a local server, e.g. `python -m http.server`).");
+        });
+        
+        // Tasks 4-6 share the world map and the cities file
+        const showError = (sel, file, err) => d3.select(sel).append("p")
+            .style("color", "crimson")
+            .text("Could not load " + file + ": " + err.message);
+
+        const worldPromise  = d3.json("world.geojson");
+        const citiesPromise = d3.csv("pakistan_cities.csv", d => ({
+            name: d.name.trim(), lat: +d.lat, lon: +d.lon, pop: +d.pop
+        }));
+        const flightsPromise = d3.csv("flights.csv", d => ({
+            source: d.source.trim(), target: d.target.trim(), flights: +d.flights
+        }));
+
+        Promise.all([worldPromise, d3.csv("population.csv", d => ({
+            id: d.id.trim(), country: d.country.trim(), population: +d.population_millions
+        }))]).then(([geo, pop]) => drawChoropleth(geo, pop))
+             .catch(err => showError("#task4", "world.geojson / population.csv", err));
+
+        Promise.all([worldPromise, citiesPromise])
+            .then(([geo, cities]) => drawCityMap(geo, cities))
+            .catch(err => showError("#task5", "world.geojson / pakistan_cities.csv", err));
+
+        Promise.all([worldPromise, citiesPromise, flightsPromise])
+            .then(([geo, cities, flights]) => drawCombinedMap(geo, cities, flights))
+            .catch(err => showError("#task6", "world.geojson / pakistan_cities.csv / flights.csv", err));
+
+        // Country code of a map feature (different GeoJSON files store it in different places)
+        const featureCode = f => f.id || (f.properties && (f.properties.iso_a3 || f.properties.ISO_A3 ||
+            f.properties["ISO3166-1-Alpha-3"] || f.properties.id)) || null;
+        const featureName = f => (f.properties && (f.properties.name || f.properties.NAME || f.properties.ADMIN)) || "Unknown";
+
+        function moveTooltip(event) {
+            tooltip.style("left", (event.pageX + 12) + "px").style("top", (event.pageY + 12) + "px");
+        }
+
+        /* ---------------- Task 4: Choropleth ---------------- */
+        function drawChoropleth(geo, popRows) {
+            const width = 1000, height = 540;
+            const svg = d3.select("#choropleth").attr("width", width).attr("height", height);
+
+            // SVG -> GROUP -> SEPARATE ELEMENTS 
+
+            const features = geo.features.filter(f => featureCode(f) !== "ATA" && featureName(f) !== "Antarctica");
+            const collection = { type: "FeatureCollection", features };
+
+            // Projection + path generator
+            // geoNaturalEarth1 -> chooses how to flatten the earth onto a screen 
+            // geoPath => converts geographic shapes into SVGs
+            const projection = d3.geoNaturalEarth1().fitSize([width, height - 50], collection);
+            const path = d3.geoPath(projection);
+
+            // Join: country code -> population row
+            const byId = new Map(popRows.map(r => [r.id, r]));
+
+            // then like byId.get(PAK) would return Pakistan's population 
+            // Sequential square-root color scale
+
+            // this like creates a color scale 
+            const [minPop, maxPop] = d3.extent(popRows, r => r.population);
+            const color = d3.scaleSequentialSqrt(d3.interpolateYlGnBu).domain([minPop, maxPop]);
+
+            svg.append("g")
+                .selectAll("path")
+                .data(features)
+                .join("path")
+                .attr("class", d => "country" + (byId.has(featureCode(d)) ? "" : " nodata"))
+                .attr("d", path)
+                .attr("fill", d => byId.has(featureCode(d)) ? color(byId.get(featureCode(d)).population) : null)
+                .on("mouseover", function (event, d) {
+                    const row = byId.get(featureCode(d));
+                    d3.select(this).classed("hovered", true).raise();
+                    tooltip.style("opacity", 1).html(row
+                        ? `<strong>${row.country}</strong><br>Population: ${d3.format(",.1f")(row.population)} million`
+                        : `<strong>${featureName(d)}</strong><br>No data`);
+                })
+                .on("mousemove", moveTooltip)
+                .on("mouseout", function () {
+                    d3.select(this).classed("hovered", false);
+                    tooltip.style("opacity", 0);
+                });
+
+            // Legend: gradient bar with min and max labels
+            const lw = 260, lh = 12, lx = 30, ly = height - 38;
+            const defs = svg.append("defs");
+            const grad = defs.append("linearGradient").attr("id", "pop-gradient");
+            d3.range(0, 1.001, 0.1).forEach(t =>
+                grad.append("stop").attr("offset", (t * 100) + "%").attr("stop-color", d3.interpolateYlGnBu(t)));
+
+            const lg = svg.append("g").attr("transform", `translate(${lx},${ly})`);
+            lg.append("text").attr("class", "legend-title").attr("y", -6).text("Population (millions, sqrt scale)");
+            lg.append("rect").attr("width", lw).attr("height", lh).attr("fill", "url(#pop-gradient)").attr("stroke", "#999");
+            lg.append("text").attr("class", "legend-text").attr("y", lh + 14).text(d3.format(",.1f")(minPop));
+            lg.append("text").attr("class", "legend-text").attr("x", lw).attr("y", lh + 14).attr("text-anchor", "end").text(d3.format(",.0f")(maxPop));
+            lg.append("rect").attr("x", lw + 30).attr("width", lh).attr("height", lh).attr("fill", "#e0e0e0").attr("stroke", "#999");
+            lg.append("text").attr("class", "legend-text").attr("x", lw + 30 + lh + 6).attr("y", lh - 2).text("No data");
+        }
+
+        /* ---------------- Shared: Pakistan base map ---------------- */
+        function pakistanProjection(width, height, geo) {
+            const pak = geo && geo.features.find(f => featureCode(f) === "PAK");
+            const proj = d3.geoMercator();
+            if (pak) {
+                // fit the whole country inside the frame, with room around it for circles and labels
+                const pad = 70;
+                return proj.fitExtent([[pad, pad], [width - pad, height - pad]], pak);
+            }
+            return proj.center([69.3, 30.4]).scale(2000).translate([width / 2, height / 2]);
+        }
+
+        function drawBaseMap(svg, geo, path, width, height) {
+            svg.append("rect").attr("width", width).attr("height", height).attr("rx", 8).attr("fill", "#e8f1fa");
+            svg.append("g")
+                .selectAll("path")
+                .data(geo.features)
+                .join("path")
+                .attr("class", d => "land" + (featureCode(d) === "PAK" ? " pak" : ""))
+                .attr("d", path);
+        }
+
+        /* ---------------- Task 5: Pakistan city points ---------------- */
+        function drawCityMap(geo, cities) {
+            const width = 1000, height = 700;
+
+            // first set up the svg 
+            const svg = d3.select("#citymap").attr("width", width).attr("height", height);
+
+            // converts geographic positions into screen coordinates 
+            const projection = pakistanProjection(width, height, geo);
+
+            // generates drawable map paths 
+            const path = d3.geoPath(projection);
+
+            // draw the map onto the SVG 
+            drawBaseMap(svg, geo, path, width, height);
+
+            // Square-root radius scale -> circle AREA is proportional to population
+            const radius = d3.scaleSqrt()
+                .domain([0, d3.max(cities, d => d.pop)])
+                .range([0, 46]);
+
+            const place = d => projection([d.lon, d.lat]);      // longitude first!
+
+            // big cities first so small ones stay on top
+            const sorted = cities.slice().sort((a, b) => b.pop - a.pop);
+
+            svg.append("g")
+                .selectAll("circle")
+                .data(sorted)
+                .join("circle")
+                .attr("class", "city-dot")
+                .attr("cx", d => place(d)[0])
+                .attr("cy", d => place(d)[1])
+                .attr("r", d => radius(d.pop))
+                .attr("fill", "#7e57c2")
+                .attr("fill-opacity", 0.45)
+                .attr("stroke", "#5e35b1")
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>${d.name}</strong><br>Population: ${d3.format(",")(d.pop)}`);
+                })
+                .on("mousemove", moveTooltip)
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            // Labels only for cities above 1 million
+            svg.append("g")
+                .selectAll("text")
+                .data(sorted.filter(d => d.pop > 1000000))
+                .join("text")
+                .attr("class", "city-label")
+                .attr("x", d => place(d)[0])
+                .attr("y", d => place(d)[1] - radius(d.pop) - 5)
+                .text(d => d.name);
+        }
+
+        /* ---------------- Task 6: Combined map ---------------- */
+        function drawCombinedMap(geo, cities, flights) {
+            const width = 1000, height = 700;
+            const svg = d3.select("#combined").attr("width", width).attr("height", height);
+
+            const projection = pakistanProjection(width, height, geo);
+            const path = d3.geoPath(projection);
+            drawBaseMap(svg, geo, path, width, height);
+
+            // Match each route's source / target to the city coordinates
+            const cityByName = new Map(cities.map(c => [c.name, c]));
+            const routes = flights
+                .filter(f => cityByName.has(f.source) && cityByName.has(f.target))
+                .map(f => ({ ...f, a: cityByName.get(f.source), b: cityByName.get(f.target) }));
+
+            // Number of routes per city -> hub if 4 or more
+            const routeCount = new Map();
+            routes.forEach(r => {
+                routeCount.set(r.a.name, (routeCount.get(r.a.name) || 0) + 1);
+                routeCount.set(r.b.name, (routeCount.get(r.b.name) || 0) + 1);
+            });
+            const isHub = c => (routeCount.get(c.name) || 0) >= 4;
+
+            const place = c => projection([c.lon, c.lat]);
+            const radius = d3.scaleSqrt().domain([0, d3.max(cities, d => d.pop)]).range([0, 34]);
+            const width_ = d3.scaleLinear().domain(d3.extent(routes, r => r.flights)).range([1.5, 8]);
+            const hubColor = "#e67e22", plainColor = "#26a69a";
+
+            // 1) Routes first ...
+            const routeSel = svg.append("g")
+                .selectAll("line")
+                .data(routes)
+                .join("line")
+                .attr("class", "air-route")
+                .attr("x1", r => place(r.a)[0]).attr("y1", r => place(r.a)[1])
+                .attr("x2", r => place(r.b)[0]).attr("y2", r => place(r.b)[1])
+                .attr("stroke-width", r => width_(r.flights))
+                .on("mouseover", (event, r) => {
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>${r.a.name} &ndash; ${r.b.name}</strong><br>${r.flights} flights / week`);
+                })
+                .on("mousemove", moveTooltip)
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            // 2) ... then cities on top
+            const sorted = cities.slice().sort((a, b) => b.pop - a.pop);
+            const dotSel = svg.append("g")
+                .selectAll("circle")
+                .data(sorted)
+                .join("circle")
+                .attr("class", "city-dot")
+                .attr("cx", c => place(c)[0])
+                .attr("cy", c => place(c)[1])
+                .attr("r", c => radius(c.pop))
+                .attr("fill", c => isHub(c) ? hubColor : plainColor)
+                .attr("fill-opacity", 0.75)
+                .attr("stroke", "#fff");
+
+            const labelSel = svg.append("g")
+                .selectAll("text")
+                .data(sorted)
+                .join("text")
+                .attr("class", "city-label")
+                .attr("x", c => place(c)[0])
+                .attr("y", c => place(c)[1] - radius(c.pop) - 5)
+                .text(c => c.name);
+
+            // Hover a city: highlight its routes, dim the rest
+            dotSel
+                .on("mouseover", (event, c) => {
+                    const linked = new Set([c.name]);
+                    routes.forEach(r => {
+                        if (r.a.name === c.name) linked.add(r.b.name);
+                        if (r.b.name === c.name) linked.add(r.a.name);
+                    });
+                    routeSel.style("opacity", r => (r.a.name === c.name || r.b.name === c.name) ? 1 : 0.06);
+                    dotSel.style("opacity", d => linked.has(d.name) ? 1 : 0.15);
+                    labelSel.style("opacity", d => linked.has(d.name) ? 1 : 0.15);
+                    tooltip.style("opacity", 1).html(
+                        `<strong>${c.name}</strong><br>Population: ${d3.format(",")(c.pop)}<br>` +
+                        `${routeCount.get(c.name) || 0} routes${isHub(c) ? " (hub)" : ""}`);
+                })
+                .on("mousemove", moveTooltip)
+                .on("mouseout", () => {
+                    routeSel.style("opacity", null);
+                    dotSel.style("opacity", null);
+                    labelSel.style("opacity", null);
+                    tooltip.style("opacity", 0);
+                });
+
+            // Legend explaining all four encodings
+            const lg = svg.append("g").attr("transform", "translate(16,16)");
+            lg.append("rect").attr("class", "legend-box").attr("width", 230).attr("height", 262).attr("rx", 6);
+            lg.append("text").attr("class", "legend-title").attr("x", 12).attr("y", 22).text("How to read this map");
+
+            lg.append("text").attr("class", "legend-text").attr("x", 12).attr("y", 46).text("Position = city location");
+
+            // size = population
+            lg.append("text").attr("class", "legend-text").attr("x", 12).attr("y", 76).text("Circle size = population");
+            const maxPop = d3.max(cities, d => d.pop);
+            [maxPop, maxPop / 4, maxPop / 16].forEach((p, i) => {
+                const cx = 36 + i * 70;
+                lg.append("circle").attr("cx", cx).attr("cy", 118).attr("r", radius(p))
+                    .attr("fill", "#bdbdbd").attr("fill-opacity", .6).attr("stroke", "#777");
+                lg.append("text").attr("class", "legend-text").attr("x", cx).attr("y", 118 + 34 + 12 * 0)
+                    .attr("text-anchor", "middle").text(d3.format(".2s")(p).replace("G", "B"));
+            });
+
+            // color = hub
+            lg.append("text").attr("class", "legend-text").attr("x", 12).attr("y", 178).text("Color");
+            [[hubColor, "Hub (4+ routes)"], [plainColor, "Not a hub"]].forEach(([col, label], i) => {
+                lg.append("circle").attr("cx", 24 + i * 100).attr("cy", 194).attr("r", 7).attr("fill", col);
+                lg.append("text").attr("class", "legend-text").attr("x", 36 + i * 100).attr("y", 198).text(label);
+            });
+
+            // line width = flights per week
+            lg.append("text").attr("class", "legend-text").attr("x", 12).attr("y", 224).text("Line width = flights / week");
+            const [fMin, fMax] = d3.extent(routes, r => r.flights);
+            [fMin, fMax].forEach((f, i) => {
+                lg.append("line").attr("x1", 14 + i * 105).attr("x2", 54 + i * 105).attr("y1", 242).attr("y2", 242)
+                    .attr("stroke", "#7e57c2").attr("stroke-width", width_(f)).attr("stroke-linecap", "round");
+                lg.append("text").attr("class", "legend-text").attr("x", 60 + i * 105).attr("y", 246).text(f);
+            });
+        }
+
+        /* ---------------- Task 1: Treemap ---------------- */
+        function drawTreemap(hierarchyData, departments, color) {
+            const width = 1000, height = 600;
+            const svg = d3.select("#chart").attr("width", width).attr("height", height);
+
+            // first we design root like university 
+            const root = d3.hierarchy(hierarchyData)
+                .sum(d => d.value || 0) // calculates total values of parent nodes using hteir children
+                .sort((a, b) => b.value - a.value); // arranges nodes 
+
+            d3.treemap()
+                .size([width, height])
+                .paddingOuter(0)
+                .paddingInner(0)
+                .round(true)(root); // rounds coordinates to integers 
+
+            // Legend
+            const legend = d3.select("#legend");
+            departments.forEach(dep => {
+                const item = legend.append("div").attr("class", "legend-item");
+                item.append("span").attr("class", "legend-swatch").style("background", color(dep));
+                item.append("span").text(dep);
+            });
+            
+            // creating the rectangles 
+            const cell = svg.selectAll("g.cell")
+                .data(root.leaves())
+                .join("g") // creaye the <g> elements 
+                .attr("class", "cell")
+                .attr("transform", d => `translate(${d.x0},${d.y0})`); // positions group according to its coordinates. 
+
+            cell.append("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", d => d.y1 - d.y0)
+                .attr("fill", d => color(d.data.department))
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>${d.data.name}</strong><br>
+                               Department: ${d.data.department}<br>
+                               Students: ${d3.format(",")(d.value)}`);
+                })
+                .on("mousemove", event => {
+                    tooltip.style("left", (event.pageX + 12) + "px")
+                           .style("top", (event.pageY + 12) + "px");
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            // Course name labels (hidden if the rectangle is too small to fit)
+            cell.append("text")
+                .attr("x", 5)
+                .attr("y", 16)
+                .text(d => d.data.name)
+                .each(function (d) {
+                    const w = d.x1 - d.x0, h = d.y1 - d.y0;
+                    if (this.getComputedTextLength() > w - 8 || h < 22) {
+                        d3.select(this).remove();
+                    }
+                });
+        }
+
+        /* ---------------- Task 2: Dendrogram ---------------- */
+        function drawDendrogram(hierarchyData) {
+            const margin = { top: 20, right: 220, bottom: 20, left: 110 };
+            const width = 1000;
+
+            const root = d3.hierarchy(hierarchyData);
+            root.each((d, i) => d.id = i);   // stable ids for the data join
+
+            const leafCount = root.leaves().length;
+            const innerH = Math.max(420, leafCount * 24);
+            const height = innerH + margin.top + margin.bottom;
+            const innerW = width - margin.left - margin.right;
+
+            //first we configure the svg and then design the elements within it 
+            const svg = d3.select("#dendro").attr("width", width).attr("height", height);
+            const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // calculates where each nodes should be positioned 
+            const cluster = d3.cluster().size([innerH, innerW]);
+
+            // Colors by depth: root, department, course
+            const depthNames = ["University (root)", "Department", "Course"];
+            const depthColor = d3.scaleOrdinal().domain([0, 1, 2]).range(["#5e35b1", "#e67e22", "#26a69a"]);
+            // 0 -> University, 1-> Department, 2->Course 
+
+            const legend = d3.select("#legend2");
+            depthNames.forEach((name, i) => {
+                const item = legend.append("div").attr("class", "legend-item");
+                item.append("span").attr("class", "legend-swatch round").style("background", depthColor(i));
+                item.append("span").text(name);
+            });
+
+            // prepares the connecting lines 
+            // horizontal and vertical coordinates
+            const linkGen = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+
+            function update() {
+                cluster(root);
+
+                // Curved links
+                g.selectAll("path.link")
+                    .data(root.links(), d => d.target.id)
+                    .join("path")
+                    .attr("class", "link")
+                    .attr("d", linkGen);
+
+                // Nodes
+                const node = g.selectAll("g.node")
+                    .data(root.descendants(), d => d.id)
+                    .join(enter => {
+                        const n = enter.append("g");
+                        n.append("circle");
+                        n.append("text");
+                        return n;
+                    })
+                    .attr("class", d => "node" + (d.depth === 1 ? " dept" : ""))
+                    .attr("transform", d => `translate(${d.y},${d.x})`);
+
+                node.select("circle")
+                    .attr("r", d => d._children ? 9 : 6)               // bigger when collapsed
+                    .attr("fill", d => depthColor(d.depth))
+                    .attr("stroke", d => d._children ? "#333" : "#fff");
+
+                // Leaf labels on the right, parent labels on the left (nudged above the incoming link)
+                node.select("text")
+                    .attr("x", d => d.children || d._children ? -10 : 10)
+                    .attr("y", d => d.children || d._children ? -10 : 0)
+                    .attr("dy", d => d.children || d._children ? 0 : "0.32em")
+                    .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+                    .text(d => d.data.name);
+
+                // Collapse / expand on department click
+                node.filter(d => d.depth === 1)
+                    .on("click", (event, d) => {
+                        if (d.children) { d._children = d.children; d.children = null; }
+                        else { d.children = d._children; d._children = null; }
+                        update();
+                    });
+            }
+
+            update();
+        }
+
+        /* ---------------- Task 3: Force-directed network ---------------- */
+        function drawNetwork(edges) {
+            const width = 1000, height = 650;
+            const svg = d3.select("#network").attr("width", width).attr("height", height);
+ 
+            // Build the node list from the edge list, with degree = number of routes
+            const degree = new Map();
+            edges.forEach(e => {
+                degree.set(e.source, (degree.get(e.source) || 0) + 1);
+                degree.set(e.target, (degree.get(e.target) || 0) + 1);
+            });
+            const nodes = Array.from(degree, ([id, deg]) => ({ id, degree: deg }));
+            const links = edges.map(e => ({ ...e }));   // d3 replaces source/target with node objects
+ 
+            // Scales
+            const radius = d3.scaleLinear()
+                .domain(d3.extent(nodes, d => d.degree))
+                .range([9, 24]);
+            const thickness = d3.scaleLinear()
+                .domain(d3.extent(links, d => d.flights))
+                .range([1, 9]);
+ 
+            const linkSel = svg.append("g")
+                .selectAll("line")
+                .data(links)
+                .join("line")
+                .attr("class", "route")
+                .attr("stroke-width", d => thickness(d.flights))
+                .attr("stroke-opacity", 0.75)
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>${d.source.id} &ndash; ${d.target.id}</strong><br>${d.flights} flights / week`);
+                })
+                .on("mousemove", event => {
+                    tooltip.style("left", (event.pageX + 12) + "px")
+                           .style("top", (event.pageY + 12) + "px");
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+ 
+            const nodeSel = svg.append("g")
+                .selectAll("g")
+                .data(nodes)
+                .join("g")
+                .attr("class", "city");
+ 
+            nodeSel.append("circle").attr("r", d => radius(d.degree));
+            nodeSel.append("text")
+                .attr("dy", d => radius(d.degree) + 14)
+                .text(d => d.id);
+ 
+            // Simulation
+            const sim = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(150))
+                .force("charge", d3.forceManyBody().strength(-500))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collide", d3.forceCollide(d => radius(d.degree) + 20))
+                .on("tick", () => {
+                    nodes.forEach(d => {
+                        const r = radius(d.degree) + 18;
+                        d.x = Math.max(r, Math.min(width - r, d.x));
+                        d.y = Math.max(r, Math.min(height - r, d.y));
+                    });
+                    linkSel
+                        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+                    nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+                });
+ 
+            // Dragging
+            nodeSel.call(d3.drag()
+                .on("start", (event, d) => {
+                    if (!event.active) sim.alphaTarget(0.3).restart();
+                    d.fx = d.x; d.fy = d.y;
+                })
+                .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+                .on("end", (event, d) => {
+                    if (!event.active) sim.alphaTarget(0);
+                    d.fx = null; d.fy = null;
+                }));
+ 
+            // Hover: highlight this city's routes, fade the rest
+            nodeSel
+                .on("mouseover", (event, d) => {
+                    const connected = new Set([d.id]);
+                    links.forEach(l => {
+                        if (l.source.id === d.id) connected.add(l.target.id);
+                        if (l.target.id === d.id) connected.add(l.source.id);
+                    });
+                    nodeSel.classed("faded", n => !connected.has(n.id));
+                    nodeSel.select("circle").classed("active", n => n.id === d.id);
+                    linkSel.classed("faded", l => l.source.id !== d.id && l.target.id !== d.id);
+ 
+                    tooltip.style("opacity", 1)
+                        .html(`<strong>${d.id}</strong><br>${d.degree} routes`);
+                })
+                .on("mousemove", event => {
+                    tooltip.style("left", (event.pageX + 12) + "px")
+                           .style("top", (event.pageY + 12) + "px");
+                })
+                .on("mouseout", () => {
+                    nodeSel.classed("faded", false);
+                    nodeSel.select("circle").classed("active", false);
+                    linkSel.classed("faded", false);
+                    tooltip.style("opacity", 0);
+                });
+        }
+ 
+    </script>
+</body>
+</html>

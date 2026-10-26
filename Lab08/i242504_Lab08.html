@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penguin Data Explorer</title>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f6fb;
+            color: #24324a;
+        }
+
+        .container {
+            max-width: 850px;
+            width: calc(100% - 30px);
+            box-sizing: border-box;
+            margin: 30px auto;
+            padding: 25px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 5px 20px #00000010;
+            text-align: center;
+        }
+
+        h1 { color: #244c75; }
+        h2 { color: #244c75; margin-top: 10px; }
+        p  { color: #667085; }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 11px 16px;
+            border: none;
+            border-radius: 8px;
+            background: #e8eef6;
+            color: #24324a;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover  { background: #d5e5f8; }
+        button.active { background: #244c75; color: white; }
+
+        #reveal { background: #244c75; color: white; }
+        #reveal:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #result {
+            background: #f3f6fb;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 18px auto;
+            max-width: 550px;
+            line-height: 1.6;
+        }
+
+        .chart-container {
+            width: 100%;
+            margin: 20px auto;
+        }
+
+        svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .bar { cursor: pointer; transition: opacity 0.2s; }
+        .bar:hover { opacity: 0.7; }
+
+        .axis text { font-size: 12px; }
+        .footer { font-size: 12px; }
+
+        hr.divider {
+            border: none;
+            border-top: 2px dashed #d5e5f8;
+            margin: 40px 0 30px;
+        }
+
+        /* ---------- Note text boxes ---------- */
+        .note-box {
+            text-align: left;
+            background: #f8fafd;
+            border: 1px solid #d5e5f8;
+            border-left: 5px solid #244c75;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin: 20px auto 10px;
+            line-height: 1.6;
+            font-size: 14px;
+            color: #24324a;
+        }
+
+        .note-box h4 {
+            margin: 0 0 8px;
+            color: #244c75;
+            font-size: 15px;
+        }
+
+        .note-box ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .note-box li { margin-bottom: 4px; }
+
+        .note-box code {
+            background: #e8eef6;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .note-box.orange { border-left-color: #f28e2b; }
+        .note-box.orange h4 { color: #b8620f; }
+
+        /* =====================================================
+           FUN & INTERACTIVE STYLING (bar colors untouched)
+           ===================================================== */
+        body {
+            background: linear-gradient(135deg, #dff1ff 0%, #e9e4ff 50%, #ffe6f1 100%) fixed;
+            min-height: 100vh;
+        }
+
+        .container {
+            border-top: 6px solid transparent;
+            border-image: linear-gradient(90deg, #4facfe, #a18cd1, #ff7eb3, #ffb347) 1;
+            transition: transform 0.25s, box-shadow 0.25s;
+        }
+
+        .container:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px #4a3f8a22;
+        }
+
+        h1 {
+            background: linear-gradient(90deg, #2b6cb0, #8a4fd6, #e0489a);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        h2 { color: #6a3fb5; }
+
+        /* Waddling penguin */
+        .penguin {
+            display: inline-block;
+            animation: waddle 1.6s ease-in-out infinite;
+            transform-origin: bottom center;
+            -webkit-text-fill-color: initial;
+        }
+
+        @keyframes waddle {
+            0%, 100% { transform: rotate(-12deg); }
+            50%      { transform: rotate(12deg) translateY(-4px); }
+        }
+
+        /* Buttons: springy + playful */
+        button {
+            transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+        }
+
+        button:hover  { transform: translateY(-3px) scale(1.05); box-shadow: 0 6px 14px #00000022; }
+        button:active { transform: scale(0.94); }
+
+        /* Colorful step buttons */
+        .container > div.controls:first-of-type button:nth-child(1) { background: #d6ecff; }
+        .container > div.controls:first-of-type button:nth-child(2) { background: #e6dcff; }
+        .container > div.controls:first-of-type button:nth-child(3) { background: #ffdcec; }
+        .container > div.controls:first-of-type button:nth-child(4) { background: #ffeccc; }
+
+        .container > div.controls:first-of-type button.active:nth-child(1) { background: linear-gradient(135deg, #4facfe, #2b6cb0); color: white; }
+        .container > div.controls:first-of-type button.active:nth-child(2) { background: linear-gradient(135deg, #a18cd1, #6a3fb5); color: white; }
+        .container > div.controls:first-of-type button.active:nth-child(3) { background: linear-gradient(135deg, #ff7eb3, #e0489a); color: white; }
+        .container > div.controls:first-of-type button.active:nth-child(4) { background: linear-gradient(135deg, #ffb347, #f28e2b); color: white; }
+
+        /* Prediction buttons */
+        #predictions button { background: #eef3fb; border: 2px solid #d5e5f8; }
+        #predictions button.active {
+            background: linear-gradient(135deg, #4facfe, #8a4fd6);
+            border-color: transparent;
+            color: white;
+            transform: scale(1.08);
+        }
+
+        #reveal { background: linear-gradient(135deg, #8a4fd6, #e0489a); font-weight: bold; }
+        #reveal:not(:disabled) { animation: pulse 1.4s ease-in-out infinite; }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 #8a4fd655; }
+            50%      { box-shadow: 0 0 0 10px #8a4fd600; }
+        }
+
+        /* Result box */
+        #result { border: 2px dashed #d5e5f8; background: #fbfaff; }
+        #result.pop   { animation: pop 0.5s ease-out; border-color: #16a36a; background: #eafaf2; }
+        #result.shake { animation: shake 0.5s ease-out; border-color: #f28e2b; background: #fff6ea; }
+
+        @keyframes pop {
+            0% { transform: scale(0.8); }
+            60% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-9px); }
+            40% { transform: translateX(9px); }
+            60% { transform: translateX(-6px); }
+            80% { transform: translateX(6px); }
+        }
+
+        /* Scoreboard */
+        .scoreboard {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 10px 0 0;
+        }
+
+        .score-pill {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #24324a;
+        }
+
+        .score-pill:nth-child(1) { background: #d6ecff; }
+        .score-pill:nth-child(2) { background: #ffeccc; }
+        .score-pill:nth-child(3) { background: #ffdcec; }
+
+        .score-pill.bump { animation: pop 0.4s ease-out; }
+
+        /* Bars grow up from the axis when drawn (colors unchanged) */
+        .bar, #chart rect, #chart2 rect {
+            transform-box: fill-box;
+            transform-origin: bottom;
+            animation: grow 0.7s cubic-bezier(.2, .9, .3, 1.2);
+        }
+
+        #chart rect, #chart2 rect { cursor: pointer; transition: opacity 0.2s; }
+        #chart rect:hover, #chart2 rect:hover { opacity: 0.7; }
+
+        @keyframes grow {
+            from { transform: scaleY(0); }
+            to   { transform: scaleY(1); }
+        }
+
+        /* Value labels fade in */
+        .value { animation: fadeUp 0.6s ease-out; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Note boxes get a little life too */
+        .note-box { transition: transform 0.2s, box-shadow 0.2s; }
+        .note-box:hover { transform: translateX(4px); box-shadow: 0 4px 14px #00000012; }
+
+        /* Confetti */
+        .confetti {
+            position: fixed;
+            top: -30px;
+            font-size: 26px;
+            pointer-events: none;
+            z-index: 999;
+            animation: fall linear forwards;
+        }
+
+        @keyframes fall {
+            to { transform: translateY(110vh) rotate(540deg); opacity: 0.8; }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- =====================================================
+     PART 1: Interactive Penguin Data Explorer
+     ===================================================== -->
+<div class="container">
+
+    <h1><span class="penguin">🐧</span> Penguin Data Explorer</h1>
+    <p>Make a prediction, explore the chart, and check your answer!</p>
+
+    <div class="scoreboard">
+        <div class="score-pill" id="scorePill">⭐ Score: 0 / 0</div>
+        <div class="score-pill" id="streakPill">🔥 Streak: 0</div>
+        <div class="score-pill" id="bestPill">🏆 Best: 0</div>
+    </div>
+
+    <h3>Choose a question</h3>
+
+    <div class="controls">
+        <button class="active" onclick="changeStep(1, this)">Step 1: Body Mass</button>
+        <button onclick="changeStep(2, this)">Step 2: Highlight</button>
+        <button onclick="changeStep(3, this)">Step 3: Flipper Length</button>
+        <button onclick="changeStep(4, this)">Step 4: By Island</button>
+    </div>
+
+    <h3 id="question">Which species do you think is heaviest?</h3>
+
+    <div class="controls" id="predictions">
+        <button onclick="makeGuess('Adelie', this)">Adelie</button>
+        <button onclick="makeGuess('Chinstrap', this)">Chinstrap</button>
+        <button onclick="makeGuess('Gentoo', this)">Gentoo</button>
+    </div>
+
+    <button id="reveal" onclick="revealAnswer()" disabled>Reveal Answer</button>
+
+    <div id="result">Make your prediction before revealing the answer!</div>
+
+    <div class="chart-container">
+        <!-- id renamed to explorerChart so it no longer clashes with the other charts -->
+        <svg id="explorerChart" viewBox="0 0 700 420"></svg>
+    </div>
+
+    <p class="footer">Tip: Hover over a bar to see its value.</p>
+
+    <!-- Task 1 answers -->
+    <div class="note-box">
+        <h4>📝 Task 1 — Answers</h4>
+        <ul>
+            <li><strong>Which line decides how tall each bar is?</strong><br>
+                <code>.attr("height", d =&gt; height - margin.bottom - y(d.value))</code></li>
+            <li><strong>What does <code>.range()</code> tell us?</strong><br>
+                It gives the pixel positions. On a web page, vertical position increases as we go down.</li>
+            <li><strong>Why does the range invert the bars?</strong><br>
+                It makes the bars start at the top and move down, instead of going bottom to top.</li>
+            <li><strong>How many rect elements are bars?</strong><br>
+                3 rect elements were identified as bars.</li>
+        </ul>
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     PART 2: Two Penguin Charts (static)
+     ===================================================== -->
+<div class="container">
+
+    <h1>Penguin Charts</h1>
+
+    <!-- First chart -->
+    <h2>Body Mass by Species</h2>
+    <svg id="chart" viewBox="0 0 600 400"></svg>
+
+    <!-- Second chart -->
+    <h2>Number of Penguins per Island</h2>
+    <!-- Fix: second graph now has its own id (chart2) -->
+    <svg id="chart2" viewBox="0 0 600 400"></svg>
+
+    <!-- Task 2 notes -->
+    <div class="note-box orange">
+        <h4>🔧 Task 2 — Debugging Notes</h4>
+        <ul>
+            <li><strong>Error seen:</strong> <code>Failed to load resource: the server responded with a status of 404 (Not Found)</code></li>
+            <li><strong>Did D3 load?</strong> Yes, D3 loaded with a status of 200.</li>
+            <li><strong>The bug:</strong> 2 SVGs both used the same id, <code>chart</code>.</li>
+            <li><strong>Console:</strong> said the data didn't load.</li>
+            <li><strong>Network:</strong> was fine, meaning there's no issue with the connection.</li>
+            <li><strong>Elements tab:</strong> showed the actual HTML elements, which is where we can see the two SVGs.</li>
+            <li><strong>Fix:</strong> change the id for the second graph.</li>
+        </ul>
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     SCRIPT 1: Interactive explorer
+     ===================================================== -->
+<script>
+    const width = 700;
+    const height = 420;
+
+    // how much empty space to reserve around the outer edges of an SVG
+    // helps show the x and y labels
+    const margin = {
+        top: 45,
+        right: 25,
+        bottom: 65,
+        left: 75
+    };
+
+    const svg = d3.select("#explorerChart");
+
+    let allData = [];
+    let averages = [];
+    let step = 1;
+    let guess = null;
+    let revealed = false;
+
+    // Load the CSV file
+    // loading the dataset
+    // d represents each row in the dataset
+    // the + sign converts string into a number
+    d3.csv("penguins.csv", d => ({
+        species: d.species,
+        island: d.island,
+        body_mass_g: +d.body_mass_g,
+        flipper_length_mm: +d.flipper_length_mm
+    })) // then tells what to do after the data has been loaded
+    .then(data => {
+        allData = data.filter(d =>
+            d.species &&
+            d.island &&
+            Number.isFinite(d.body_mass_g) &&
+            d.body_mass_g > 0 &&
+            Number.isFinite(d.flipper_length_mm) &&
+            d.flipper_length_mm > 0
+        );
+        drawChart();
+    })
+    .catch(error => {
+        console.error(error);
+        document.getElementById("result").textContent =
+            "Could not load penguins.csv. Check the file location.";
+    });
+
+    // Change between the four steps
+    function changeStep(newStep, button) {
+        step = newStep;
+        guess = null;
+        revealed = false;
+
+        document.querySelectorAll(".controls button")
+            .forEach(b => b.classList.remove("active"));
+
+        button.classList.add("active");
+
+        document.getElementById("reveal").disabled = true;
+        document.getElementById("result").textContent =
+            "Make your prediction before revealing the answer!";
+
+        const questions = {
+            1: "Which species do you think is heaviest?",
+            2: "Which species has the highest average body mass?",
+            3: "Does Gentoo have the longest average flippers?",
+            4: "Which island has the heaviest penguins?"
+        };
+
+        document.getElementById("question").textContent = questions[step];
+
+        const predictionBox = document.getElementById("predictions");
+        predictionBox.innerHTML = "";
+
+        let options = step === 4
+            ? ["Biscoe", "Dream", "Torgersen"]
+            : ["Adelie", "Chinstrap", "Gentoo"];
+
+        options.forEach(option => {
+            const b = document.createElement("button");
+            b.textContent = option;
+            b.onclick = () => makeGuess(option, b);
+            predictionBox.appendChild(b);
+        });
+
+        drawChart();
+    }
+
+    // Record the student's guess
+    function makeGuess(value, button) {
+        if (revealed) return; // answer already revealed for this question
+        guess = value;
+
+        document.querySelectorAll("#predictions button")
+            .forEach(b => b.classList.remove("active"));
+
+        button.classList.add("active");
+        document.getElementById("reveal").disabled = false;
+        document.getElementById("result").textContent =
+            "Your prediction: " + guess + ". Now reveal the answer!";
+    }
+
+    // Reveal the correct answer
+    function revealAnswer() {
+        if (!guess || averages.length === 0 || revealed) return;
+
+        revealed = true;
+
+        const winner = averages.reduce((a, b) =>
+            a.value > b.value ? a : b
+        );
+
+        const correct = guess === winner.name;
+
+        let message = correct ? "🎉 Correct! " : "Not quite! ";
+        message += winner.name + " has the highest average ";
+        message += step === 3 ? "flipper length." : "body mass.";
+
+        const resultBox = document.getElementById("result");
+        resultBox.textContent = message;
+
+        // Pop (correct) or shake (wrong) animation
+        resultBox.classList.remove("pop", "shake");
+        void resultBox.offsetWidth; // restart the animation
+        resultBox.classList.add(correct ? "pop" : "shake");
+
+        // Scoreboard
+        played++;
+        if (correct) {
+            score++;
+            streak++;
+            best = Math.max(best, streak);
+            launchConfetti();
+        } else {
+            streak = 0;
+        }
+        updateScoreboard();
+
+        drawChart();
+    }
+
+    // ---------- Fun extras: scoreboard + confetti ----------
+    let score = 0, played = 0, streak = 0, best = 0;
+
+    function updateScoreboard() {
+        document.getElementById("scorePill").textContent = "⭐ Score: " + score + " / " + played;
+        document.getElementById("streakPill").textContent = "🔥 Streak: " + streak;
+        document.getElementById("bestPill").textContent = "🏆 Best: " + best;
+
+        document.querySelectorAll(".score-pill").forEach(p => {
+            p.classList.remove("bump");
+            void p.offsetWidth;
+            p.classList.add("bump");
+        });
+    }
+
+    function launchConfetti() {
+        const pieces = ["🎉", "🐧", "⭐", "🎊", "❄️", "✨"];
+        for (let i = 0; i < 40; i++) {
+            const el = document.createElement("span");
+            el.className = "confetti";
+            el.textContent = pieces[Math.floor(Math.random() * pieces.length)];
+            el.style.left = Math.random() * 100 + "vw";
+            el.style.fontSize = 18 + Math.random() * 20 + "px";
+            el.style.animationDuration = 2 + Math.random() * 2 + "s";
+            el.style.animationDelay = Math.random() * 0.6 + "s";
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 5000);
+        }
+    }
+
+    // Calculate averages and draw the chart
+    function drawChart() {
+        if (allData.length === 0) return;
+
+        svg.selectAll("*").remove();
+
+        const groupKey = step === 4 ? "island" : "species";
+        const valueKey = step === 3 ? "flipper_length_mm" : "body_mass_g";
+
+        averages = Array.from(
+            d3.rollup(
+                allData,
+                v => d3.mean(v, d => d[valueKey]),
+                d => d[groupKey]
+            ),
+            ([name, value]) => ({ name, value })
+        );
+
+        const x = d3.scaleBand()
+            .domain(averages.map(d => d.name))
+            .range([margin.left, width - margin.right])
+            .padding(0.3);
+
+        // .range() = pixel positions; vertical position increases going down,
+        // so the range is inverted to make bars grow upward from the axis
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(averages, d => d.value) * 1.15])
+            .nice()
+            .range([height - margin.bottom, margin.top]);
+
+        const winner = averages.reduce((a, b) =>
+            a.value > b.value ? a : b
+        );
+
+        // Chart title
+        const titles = {
+            1: "Average Body Mass by Species",
+            2: "Highlight the Heaviest Species",
+            3: "Average Flipper Length by Species",
+            4: "Average Body Mass by Island"
+        };
+
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", 23)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "17px")
+            .attr("font-weight", "bold")
+            .attr("fill", "#244c75")
+            .text(titles[step]);
+
+        // Light grid lines
+        svg.append("g")
+            .attr("transform", `translate(${margin.left},0)`)
+            .call(
+                d3.axisLeft(y)
+                    .ticks(5)
+                    .tickSize(-(width - margin.left - margin.right))
+                    .tickFormat("")
+            )
+            .call(g => g.select(".domain").remove())
+            .call(g => g.selectAll("line").attr("stroke", "#e8edf4"));
+
+        // Bars
+        // what type, what data, what shape
+        svg.selectAll(".bar")
+            .data(averages)
+            .join("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.name))
+            .attr("y", d => y(d.value))
+            .attr("width", x.bandwidth())
+            .attr("height", d => height - margin.bottom - y(d.value))
+            .attr("rx", 7)
+            .attr("fill", d => {
+                if (!revealed) return "#76a9e8";
+
+                // Step 2: Gentoo red, others blue
+                if (step === 2) {
+                    return d.name === "Gentoo" ? "red" : "steelblue";
+                }
+
+                // Highlight the correct answer in other steps
+                return d.name === winner.name ? "#16a36a" : "#76a9e8";
+            })
+            .append("title")
+            .text(d => d.name + ": " +
+                (step === 3
+                    ? d.value.toFixed(1) + " mm average flipper length"
+                    : Math.round(d.value) + " g average body mass"));
+
+        // Show values after revealing
+        if (revealed) {
+            svg.selectAll(".value")
+                .data(averages)
+                .join("text")
+                .attr("class", "value")
+                .attr("x", d => x(d.name) + x.bandwidth() / 2)
+                .attr("y", d => y(d.value) - 8)
+                .attr("text-anchor", "middle")
+                .attr("font-size", "13px")
+                .attr("font-weight", "bold")
+                .text(d => step === 3
+                    ? d.value.toFixed(1) + " mm"
+                    : Math.round(d.value) + " g");
+        }
+
+        // X axis
+        svg.append("g")
+            .attr("class", "axis")
+            .attr("transform", `translate(0,${height - margin.bottom})`)
+            .call(d3.axisBottom(x));
+
+        // Y axis
+        svg.append("g")
+            .attr("class", "axis")
+            .attr("transform", `translate(${margin.left},0)`)
+            .call(d3.axisLeft(y).ticks(5));
+
+        // Y axis label
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", 20)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "13px")
+            .attr("fill", "#526176")
+            .text(step === 3
+                ? "Average Flipper Length (mm)"
+                : "Average Body Mass (g)");
+    }
+</script>
+
+<!-- =====================================================
+     SCRIPT 2: First static chart — body mass by species
+     ===================================================== -->
+<script>
+    d3.csv("penguins.csv").then(data => {
+
+        const averagesStatic = Array.from(
+            d3.rollup(
+                data,
+                v => d3.mean(v, d => +d.body_mass_g),
+                d => d.species
+            ),
+            ([name, value]) => ({ name, value })
+        );
+
+        const chartSvg = d3.select("#chart");
+
+        const x = d3.scaleBand()
+            .domain(averagesStatic.map(d => d.name))
+            .range([50, 550])
+            .padding(0.3);
+
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(averagesStatic, d => d.value)])
+            .range([350, 20]);
+
+        chartSvg.selectAll("rect")
+            .data(averagesStatic)
+            .join("rect")
+            .attr("x", d => x(d.name))
+            .attr("y", d => y(d.value))
+            .attr("width", x.bandwidth())
+            .attr("height", d => 350 - y(d.value))
+            .attr("fill", "steelblue");
+
+        chartSvg.append("g")
+            .attr("transform", "translate(0,350)")
+            .call(d3.axisBottom(x));
+
+        chartSvg.append("g")
+            .attr("transform", "translate(50,0)")
+            .call(d3.axisLeft(y));
+    }).catch(error => console.error("Chart 1 failed to load data:", error));
+</script>
+
+<!-- =====================================================
+     SCRIPT 3: Second static chart — penguin count per island
+     ===================================================== -->
+<script>
+    d3.csv("penguins.csv").then(data => {
+
+        const counts = Array.from(
+            d3.rollup(
+                data,
+                v => v.length,
+                d => d.island
+            ),
+            ([name, value]) => ({ name, value })
+        );
+
+        const chart2Svg = d3.select("#chart2");
+
+        const x = d3.scaleBand()
+            .domain(counts.map(d => d.name))
+            .range([50, 550])
+            .padding(0.3);
+
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(counts, d => d.value)])
+            .range([350, 20]);
+
+        chart2Svg.selectAll("rect")
+            .data(counts)
+            .join("rect")
+            .attr("x", d => x(d.name))
+            .attr("y", d => y(d.value))
+            .attr("width", x.bandwidth())
+            .attr("height", d => 350 - y(d.value))
+            .attr("fill", "orange");
+
+        chart2Svg.append("g")
+            .attr("transform", "translate(0,350)")
+            .call(d3.axisBottom(x));
+
+        chart2Svg.append("g")
+            .attr("transform", "translate(50,0)")
+            .call(d3.axisLeft(y));
+    }).catch(error => console.error("Chart 2 failed to load data:", error));
+</script>
+
+</body>
+</html>
