@@ -1,0 +1,100 @@
+# Muhammad Hashmi 24i-2037 DS-5A
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Task 5: Pakistan Cities Point Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f8f9fa; }
+    h2 { color: #2c3e50; margin-bottom: 5px; }
+    p.subtitle { color: #7f8c8d; margin-top: 0; font-size: 0.95rem; }
+    #chart { background: #ecfeff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: inline-block; }
+    .country-bg { fill: #e2e8f0; stroke: #94a3b8; stroke-width: 1px; }
+    .city-circle { fill: #ea580c; fill-opacity: 0.55; stroke: #c2410c; stroke-width: 1.5px; transition: fill-opacity 0.2s; }
+    .city-circle:hover { fill-opacity: 0.85; cursor: pointer; }
+    .city-label { font-size: 11px; font-weight: 600; fill: #1e293b; pointer-events: none; }
+    .tooltip { position: absolute; padding: 8px 12px; background: rgba(15, 23, 42, 0.9); color: #fff; font-size: 12px; border-radius: 4px; pointer-events: none; opacity: 0; }
+  </style>
+</head>
+<body>
+
+  <h2>Task 5: Pakistan Major Cities Point Map</h2>
+  <p class="subtitle">Circle Area = City Population (Millions). Labels shown for cities > 1.0M population.</p>
+
+  <div id="chart"></div>
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    const embeddedCities = [
+      {name: "Karachi", lat: 24.86, lon: 67.01, pop: 16.0},
+      {name: "Lahore", lat: 31.52, lon: 74.36, pop: 13.0},
+      {name: "Faisalabad", lat: 31.42, lon: 73.08, pop: 3.7},
+      {name: "Multan", lat: 30.20, lon: 71.47, pop: 2.0},
+      {name: "Peshawar", lat: 34.01, lon: 71.58, pop: 2.0},
+      {name: "Islamabad", lat: 33.68, lon: 73.05, pop: 1.1},
+      {name: "Quetta", lat: 30.18, lon: 66.98, pop: 1.0},
+      {name: "Sialkot", lat: 32.49, lon: 74.53, pop: 0.7},
+      {name: "Gwadar", lat: 25.12, lon: 62.32, pop: 0.3},
+      {name: "Skardu", lat: 35.30, lon: 75.63, pop: 0.03}
+    ];
+
+    const pakGeoJSON = {
+      "type": "FeatureCollection",
+      "features": [
+        {"type": "Feature", "properties": {"name": "Pakistan"}, "geometry": {"type": "Polygon", "coordinates": [[[61,25],[68,24],[70,28],[75,32],[77,35],[74,37],[71,36],[61,29],[61,25]]]}}
+      ]
+    };
+
+    d3.csv("pakistan_cities.csv", d3.autoType).then(data => render(data)).catch(() => render(embeddedCities));
+
+    function render(cities) {
+      const width = 750, height = 550;
+      const svg = d3.select("#chart").append("svg").attr("width", width).attr("height", height);
+      const tooltip = d3.select("#tooltip");
+
+      const projection = d3.geoMercator().center([69.3, 30.5]).scale(1800).translate([width / 2, height / 2]);
+      const path = d3.geoPath().projection(projection);
+
+      // Map Background
+      svg.selectAll(".country-bg")
+        .data(pakGeoJSON.features)
+        .enter().append("path")
+        .attr("class", "country-bg")
+        .attr("d", path);
+
+      // Square-root radius scale for honest area encoding
+      const radiusScale = d3.scaleSqrt()
+        .domain([0, d3.max(cities, d => d.pop)])
+        .range([4, 28]);
+
+      // City Circles
+      svg.selectAll(".city-circle")
+        .data(cities)
+        .enter().append("circle")
+        .attr("class", "city-circle")
+        .attr("cx", d => projection([d.lon, d.lat])[0])
+        .attr("cy", d => projection([d.lon, d.lat])[1])
+        .attr("r", d => radiusScale(d.pop))
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1)
+                 .html(`<strong>${d.name}</strong><br/>Population: ${d.pop} Million`);
+        })
+        .on("mousemove", (event) => {
+          tooltip.style("left", (event.pageX + 12) + "px")
+                 .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", () => tooltip.style("opacity", 0));
+
+      // Labels for cities with pop > 1.0 million
+      svg.selectAll(".city-label")
+        .data(cities.filter(d => d.pop >= 1.0))
+        .enter().append("text")
+        .attr("class", "city-label")
+        .attr("x", d => projection([d.lon, d.lat])[0] + radiusScale(d.pop) + 4)
+        .attr("y", d => projection([d.lon, d.lat])[1] + 4)
+        .text(d => d.name);
+    }
+  </script>
+</body>
+</html> 

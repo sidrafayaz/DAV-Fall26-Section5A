@@ -1,0 +1,140 @@
+# Muhammad Hashmi 24i-2037 DS-5A
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Task 1: Course Enrollment Treemap</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f8f9fa; }
+    h2 { color: #2c3e50; margin-bottom: 5px; }
+    p.subtitle { color: #7f8c8d; margin-top: 0; font-size: 0.95rem; }
+    #chart { background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: inline-block; }
+    .node-rect { stroke: #ffffff; stroke-width: 1.5px; rx: 3px; ry: 3px; transition: opacity 0.2s; }
+    .node-rect:hover { opacity: 0.85; cursor: pointer; stroke: #2c3e50; stroke-width: 2px; }
+    .node-label { font-size: 11px; font-weight: 600; fill: #ffffff; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+    .node-sublabel { font-size: 10px; fill: #f0f0f0; pointer-events: none; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+    .tooltip { position: absolute; text-align: left; padding: 8px 12px; font: 12px sans-serif; background: rgba(44, 62, 80, 0.9); color: #fff; border-radius: 4px; pointer-events: none; opacity: 0; transition: opacity 0.15s; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .legend { font-size: 12px; margin-top: 15px; display: flex; gap: 20px; align-items: center; }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-color { width: 14px; height: 14px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <h2>Task 1: University Course Enrollment Treemap</h2>
+  <p class="subtitle">Visualization of student numbers per course, grouped and colored by department</p>
+  
+  <div id="chart"></div>
+  <div class="legend" id="legend"></div>
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    const embeddedData = [
+      {department: "Computer Science", course: "Data Structures", students: 120},
+      {department: "Computer Science", course: "Databases", students: 95},
+      {department: "Computer Science", course: "Data Visualization", students: 80},
+      {department: "Computer Science", course: "AI", students: 110},
+      {department: "Engineering", course: "Circuits", students: 150},
+      {department: "Engineering", course: "Thermodynamics", students: 90},
+      {department: "Engineering", course: "Mechanics", students: 130},
+      {department: "Business", course: "Marketing", students: 100},
+      {department: "Business", course: "Accounting", students: 140},
+      {department: "Business", course: "Finance", students: 85},
+      {department: "Sciences", course: "Physics", students: 70},
+      {department: "Sciences", course: "Chemistry", students: 75},
+      {department: "Sciences", course: "Statistics", students: 105}
+    ];
+
+    d3.csv("university.csv", d3.autoType).then(data => render(data)).catch(() => render(embeddedData));
+
+    function render(data) {
+      const width = 800, height = 500;
+      
+      const nested = d3.group(data, d => d.department);
+      const rootData = {
+        name: "University",
+        children: Array.from(nested, ([dept, courses]) => ({
+          name: dept,
+          children: courses
+        }))
+      };
+
+      const root = d3.hierarchy(rootData)
+        .sum(d => d.students)
+        .sort((a, b) => b.value - a.value);
+
+      d3.treemap()
+        .size([width, height])
+        .paddingInner(3)
+        .paddingOuter(4)
+        .paddingTop(22)(root);
+
+      const svg = d3.select("#chart").append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+      const color = d3.scaleOrdinal()
+        .domain(["Computer Science", "Engineering", "Business", "Sciences"])
+        .range(["#5e72e4", "#2dce89", "#fb6340", "#11cdef"]);
+
+      const tooltip = d3.select("#tooltip");
+
+      // Draw Department Containers / Labels
+      svg.selectAll(".dept-label")
+        .data(root.children)
+        .enter()
+        .append("text")
+        .attr("x", d => d.x0 + 6)
+        .attr("y", d => d.y0 + 15)
+        .text(d => d.data.name)
+        .attr("font-size", "12px")
+        .attr("font-weight", "bold")
+        .attr("fill", "#32325d");
+
+      // Leaf Nodes (Courses)
+      const nodes = svg.selectAll(".node")
+        .data(root.leaves())
+        .enter().append("g")
+        .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+      nodes.append("rect")
+        .attr("class", "node-rect")
+        .attr("width", d => d.x1 - d.x0)
+        .attr("height", d => d.y1 - d.y0)
+        .attr("fill", d => color(d.parent.data.name))
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1)
+                 .html(`<strong>Course:</strong> ${d.data.course}<br/>
+                        <strong>Department:</strong> ${d.parent.data.name}<br/>
+                        <strong>Students:</strong> ${d.data.students}`);
+        })
+        .on("mousemove", (event) => {
+          tooltip.style("left", (event.pageX + 12) + "px")
+                 .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", () => tooltip.style("opacity", 0));
+
+      nodes.append("text")
+        .attr("class", "node-label")
+        .attr("x", 6)
+        .attr("y", 16)
+        .text(d => (d.x1 - d.x0 > 55 && d.y1 - d.y0 > 25) ? d.data.course : "");
+
+      nodes.append("text")
+        .attr("class", "node-sublabel")
+        .attr("x", 6)
+        .attr("y", 30)
+        .text(d => (d.x1 - d.x0 > 55 && d.y1 - d.y0 > 40) ? `${d.data.students} students` : "");
+
+      // Color Legend
+      const legend = d3.select("#legend");
+      color.domain().forEach(dept => {
+        legend.append("div")
+              .attr("class", "legend-item")
+              .html(`<div class="legend-color" style="background:${color(dept)}"></div><span>${dept}</span>`);
+      });
+    }
+  </script>
+</body>
+</html>
