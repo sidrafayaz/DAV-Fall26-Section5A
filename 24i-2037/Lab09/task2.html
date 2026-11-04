@@ -1,0 +1,133 @@
+# Muhammad Hashmi 24i-2037 DS-5A
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Task 2: University Structure Dendrogram</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f8f9fa; }
+    h2 { color: #2c3e50; margin-bottom: 5px; }
+    p.subtitle { color: #7f8c8d; margin-top: 0; font-size: 0.95rem; }
+    #chart { background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: inline-block; }
+    .link { fill: none; stroke: #cbd5e1; stroke-width: 2px; }
+    .node circle { cursor: pointer; stroke-width: 2px; transition: r 0.2s; }
+    .node circle:hover { r: 8px; }
+    .node text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .hint { font-size: 11px; color: #64748b; margin-top: 10px; font-style: italic; }
+  </style>
+</head>
+<body>
+
+  <h2>Task 2: University Structure Horizontal Dendrogram</h2>
+  <p class="subtitle">Hierarchical layout showing University → Department → Course</p>
+  
+  <div id="chart"></div>
+  <div class="hint">* Click on department nodes to collapse/expand courses</div>
+
+  <script>
+    const embeddedData = [
+      {department: "Computer Science", course: "Data Structures", students: 120},
+      {department: "Computer Science", course: "Databases", students: 95},
+      {department: "Computer Science", course: "Data Visualization", students: 80},
+      {department: "Computer Science", course: "AI", students: 110},
+      {department: "Engineering", course: "Circuits", students: 150},
+      {department: "Engineering", course: "Thermodynamics", students: 90},
+      {department: "Engineering", course: "Mechanics", students: 130},
+      {department: "Business", course: "Marketing", students: 100},
+      {department: "Business", course: "Accounting", students: 140},
+      {department: "Business", course: "Finance", students: 85},
+      {department: "Sciences", course: "Physics", students: 70},
+      {department: "Sciences", course: "Chemistry", students: 75},
+      {department: "Sciences", course: "Statistics", students: 105}
+    ];
+
+    d3.csv("university.csv", d3.autoType).then(data => render(data)).catch(() => render(embeddedData));
+
+    function render(data) {
+      const margin = {top: 20, right: 150, bottom: 20, left: 100};
+      const width = 800 - margin.left - margin.right;
+      const height = 500 - margin.top - margin.bottom;
+
+      const svg = d3.select("#chart").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const nested = d3.group(data, d => d.department);
+      const rootData = {
+        name: "University",
+        children: Array.from(nested, ([dept, courses]) => ({
+          name: dept,
+          children: courses.map(c => ({ name: c.course, students: c.students }))
+        }))
+      };
+
+      const root = d3.hierarchy(rootData);
+      const cluster = d3.cluster().size([height, width]);
+
+      // Depth Color Scale
+      const depthColor = d3.scaleOrdinal()
+        .domain([0, 1, 2])
+        .range(["#4f46e5", "#0ea5e9", "#10b981"]);
+
+      function update(source) {
+        cluster(root);
+
+        const nodes = root.descendants();
+        const links = root.links();
+
+        // Links
+        const link = svg.selectAll(".link")
+          .data(links, d => d.target.data.name);
+
+        link.exit().remove();
+
+        link.enter().append("path")
+          .attr("class", "link")
+          .merge(link)
+          .attr("d", d3.linkHorizontal()
+            .x(d => d.y)
+            .y(d => d.x));
+
+        // Nodes
+        const node = svg.selectAll(".node")
+          .data(nodes, d => d.data.name);
+
+        node.exit().remove();
+
+        const nodeEnter = node.enter().append("g")
+          .attr("class", "node")
+          .attr("transform", d => `translate(${d.y},${d.x})`)
+          .on("click", (event, d) => {
+            if (d.children) {
+              d._children = d.children;
+              d.children = null;
+            } else if (d._children) {
+              d.children = d._children;
+              d._children = null;
+            }
+            update(d);
+          });
+
+        nodeEnter.append("circle")
+          .attr("r", 6)
+          .attr("fill", d => depthColor(d.depth))
+          .attr("stroke", "#ffffff");
+
+        nodeEnter.append("text")
+          .attr("dy", "0.31em")
+          .attr("x", d => d.children || d._children ? -12 : 12)
+          .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+          .text(d => d.data.name);
+
+        svg.selectAll(".node")
+          .attr("transform", d => `translate(${d.y},${d.x})`);
+      }
+
+      update(root);
+    }
+  </script>
+</body>
+</html>

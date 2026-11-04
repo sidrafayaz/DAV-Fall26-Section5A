@@ -1,0 +1,173 @@
+# Muhammad Hashmi 24i-2037 DS-5A
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Task 6: Combined Spatial Encoding Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f8f9fa; }
+    h2 { color: #2c3e50; margin-bottom: 5px; }
+    p.subtitle { color: #7f8c8d; margin-top: 0; font-size: 0.95rem; }
+    #chart { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: inline-block; }
+    .country-bg { fill: #e2e8f0; stroke: #cbd5e1; stroke-width: 1px; }
+    .route-line { stroke: #64748b; stroke-opacity: 0.5; transition: stroke 0.2s, stroke-opacity 0.2s; }
+    .city-circle { stroke: #ffffff; stroke-width: 1.5px; cursor: pointer; transition: opacity 0.2s; }
+    .city-label { font-size: 11px; font-weight: 600; fill: #1e293b; pointer-events: none; }
+    .dimmed { opacity: 0.15 !important; }
+    .highlighted-route { stroke: #e11d48 !important; stroke-opacity: 1 !important; }
+    .legend { font-size: 12px; background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 15px; display: flex; gap: 25px; }
+    .legend-box { display: flex; flex-direction: column; gap: 4px; }
+    .legend-title { font-weight: bold; margin-bottom: 4px; color: #334155; }
+  </style>
+</head>
+<body>
+
+  <h2>Task 6: Combined Spatial Encoding Map</h2>
+  <p class="subtitle">Position = Lat/Lon, Circle Size = Population, Color = Hub (≥4 Routes), Line Width = Flight Volume</p>
+
+  <div id="chart"></div>
+
+  <div class="legend">
+    <div class="legend-box">
+      <span class="legend-title">Node Color (Hub Status)</span>
+      <span><span style="color:#f97316;">●</span> Hub City (≥4 Routes)</span>
+      <span><span style="color:#0284c7;">●</span> Regular City (<4 Routes)</span>
+    </div>
+    <div class="legend-box">
+      <span class="legend-title">Circle Radius</span>
+      <span>Sqrt Scale proportional to Population</span>
+    </div>
+    <div class="legend-box">
+      <span class="legend-title">Line Thickness</span>
+      <span>Proportional to Weekly Flight Volume</span>
+    </div>
+  </div>
+
+  <script>
+    const embeddedCities = [
+      {name: "Karachi", lat: 24.86, lon: 67.01, pop: 16.0},
+      {name: "Lahore", lat: 31.52, lon: 74.36, pop: 13.0},
+      {name: "Faisalabad", lat: 31.42, lon: 73.08, pop: 3.7},
+      {name: "Multan", lat: 30.20, lon: 71.47, pop: 2.0},
+      {name: "Peshawar", lat: 34.01, lon: 71.58, pop: 2.0},
+      {name: "Islamabad", lat: 33.68, lon: 73.05, pop: 1.1},
+      {name: "Quetta", lat: 30.18, lon: 66.98, pop: 1.0},
+      {name: "Sialkot", lat: 32.49, lon: 74.53, pop: 0.7},
+      {name: "Gwadar", lat: 25.12, lon: 62.32, pop: 0.3},
+      {name: "Skardu", lat: 35.30, lon: 75.63, pop: 0.03}
+    ];
+
+    const embeddedFlights = [
+      {source: "Karachi", target: "Lahore", flights: 70},
+      {source: "Karachi", target: "Islamabad", flights: 65},
+      {source: "Karachi", target: "Peshawar", flights: 28},
+      {source: "Karachi", target: "Quetta", flights: 25},
+      {source: "Karachi", target: "Multan", flights: 21},
+      {source: "Karachi", target: "Faisalabad", flights: 14},
+      {source: "Karachi", target: "Gwadar", flights: 10},
+      {source: "Lahore", target: "Islamabad", flights: 20},
+      {source: "Lahore", target: "Quetta", flights: 7},
+      {source: "Islamabad", target: "Quetta", flights: 10},
+      {source: "Islamabad", target: "Skardu", flights: 14},
+      {source: "Islamabad", target: "Sialkot", flights: 6}
+    ];
+
+    const pakGeoJSON = {
+      "type": "FeatureCollection",
+      "features": [
+        {"type": "Feature", "properties": {"name": "Pakistan"}, "geometry": {"type": "Polygon", "coordinates": [[[61,25],[68,24],[70,28],[75,32],[77,35],[74,37],[71,36],[61,29],[61,25]]]}}
+      ]
+    };
+
+    Promise.all([
+      d3.csv("pakistan_cities.csv", d3.autoType).catch(() => embeddedCities),
+      d3.csv("flights.csv", d3.autoType).catch(() => embeddedFlights)
+    ]).then(([cities, flights]) => render(cities, flights));
+
+    function render(cities, flights) {
+      const width = 800, height = 580;
+      const svg = d3.select("#chart").append("svg").attr("width", width).attr("height", height);
+
+      const projection = d3.geoMercator().center([69.3, 30.5]).scale(1900).translate([width / 2, height / 2]);
+      const path = d3.geoPath().projection(projection);
+
+      // City Coordinates Lookup
+      const cityCoords = new Map(cities.map(c => [c.name, projection([c.lon, c.lat])]));
+
+      // Count Route Degree per city
+      const degreeMap = new Map();
+      flights.forEach(f => {
+        degreeMap.set(f.source, (degreeMap.get(f.source) || 0) + 1);
+        degreeMap.set(f.target, (degreeMap.get(f.target) || 0) + 1);
+      });
+
+      // Background Map
+      svg.selectAll(".country-bg")
+        .data(pakGeoJSON.features)
+        .enter().append("path")
+        .attr("class", "country-bg")
+        .attr("d", path);
+
+      // Scales
+      const radiusScale = d3.scaleSqrt()
+        .domain([0, d3.max(cities, d => d.pop)])
+        .range([5, 26]);
+
+      const linkScale = d3.scaleLinear()
+        .domain(d3.extent(flights, d => d.flights))
+        .range([1.5, 7]);
+
+      // 1. Draw Routes First
+      const routeLines = svg.append("g")
+        .selectAll("line")
+        .data(flights)
+        .enter().append("line")
+        .attr("class", "route-line")
+        .attr("x1", d => cityCoords.get(d.source)[0])
+        .attr("y1", d => cityCoords.get(d.source)[1])
+        .attr("x2", d => cityCoords.get(d.target)[0])
+        .attr("y2", d => cityCoords.get(d.target)[1])
+        .attr("stroke-width", d => linkScale(d.flights));
+
+      // 2. Draw Cities On Top
+      const cityNodes = svg.append("g")
+        .selectAll(".city-group")
+        .data(cities)
+        .enter().append("g")
+        .attr("class", "city-group")
+        .attr("transform", d => `translate(${cityCoords.get(d.name)[0]},${cityCoords.get(d.name)[1]})`);
+
+      cityNodes.append("circle")
+        .attr("class", "city-circle")
+        .attr("r", d => radiusScale(d.pop))
+        .attr("fill", d => (degreeMap.get(d.name) || 0) >= 4 ? "#f97316" : "#0284c7");
+
+      cityNodes.append("text")
+        .attr("class", "city-label")
+        .attr("dx", d => radiusScale(d.pop) + 5)
+        .attr("dy", "0.35em")
+        .text(d => d.name);
+
+      // Interactive Highlight on Hover
+      cityNodes.on("mouseover", (event, d) => {
+        const activeCities = new Set([d.name]);
+
+        routeLines.classed("highlighted-route", l => {
+          if (l.source === d.name || l.target === d.name) {
+            activeCities.add(l.source);
+            activeCities.add(l.target);
+            return true;
+          }
+          return false;
+        }).classed("dimmed", l => !(l.source === d.name || l.target === d.name));
+
+        cityNodes.classed("dimmed", n => !activeCities.has(n.name));
+      }).on("mouseout", () => {
+        routeLines.classed("highlighted-route", false).classed("dimmed", false);
+        cityNodes.classed("dimmed", false);
+      });
+    }
+  </script>
+</body>
+</html>

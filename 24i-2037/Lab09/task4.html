@@ -1,0 +1,103 @@
+# Muhammad Hashmi 24i-2037 DS-5A
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Task 4: World Population Choropleth Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background: #f8f9fa; }
+    h2 { color: #2c3e50; margin-bottom: 5px; }
+    p.subtitle { color: #7f8c8d; margin-top: 0; font-size: 0.95rem; }
+    #chart { background: #e0f2fe; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: inline-block; }
+    .country { stroke: #ffffff; stroke-width: 0.6px; transition: stroke 0.15s, stroke-width 0.15s; }
+    .country:hover { stroke: #0f172a; stroke-width: 1.5px; cursor: pointer; }
+    .tooltip { position: absolute; padding: 8px 12px; background: rgba(15, 23, 42, 0.9); color: #fff; font-size: 12px; border-radius: 4px; pointer-events: none; opacity: 0; }
+    .legend { margin-top: 15px; font-size: 12px; display: flex; align-items: center; gap: 10px; }
+    .gradient-bar { width: 200px; height: 12px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <h2>Task 4: World Population Choropleth Map</h2>
+  <p class="subtitle">Sequential Square-Root Scale Encoding of Population (Millions)</p>
+
+  <div id="chart"></div>
+  <div class="legend">
+    <span>42M</span>
+    <div class="gradient-bar" id="gradient"></div>
+    <span>1,430M</span>
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    const populationData = [
+      {id: "PAK", country: "Pakistan", population_millions: 240},
+      {id: "IND", country: "India", population_millions: 1430},
+      {id: "CHN", country: "China", population_millions: 1410},
+      {id: "USA", country: "United States", population_millions: 335},
+      {id: "IDN", country: "Indonesia", population_millions: 277},
+      {id: "BRA", country: "Brazil", population_millions: 216},
+      {id: "NGA", country: "Nigeria", population_millions: 223},
+      {id: "BGD", country: "Bangladesh", population_millions: 173},
+      {id: "RUS", country: "Russia", population_millions: 144},
+      {id: "JPN", country: "Japan", population_millions: 124},
+      {id: "MEX", country: "Mexico", population_millions: 128},
+      {id: "EGY", country: "Egypt", population_millions: 112},
+      {id: "IRN", country: "Iran", population_millions: 89},
+      {id: "TUR", country: "Turkey", population_millions: 85},
+      {id: "DEU", country: "Germany", population_millions: 84},
+      {id: "GBR", country: "United Kingdom", population_millions: 68},
+      {id: "FRA", country: "France", population_millions: 68},
+      {id: "AFG", country: "Afghanistan", population_millions: 42}
+    ];
+
+    const worldGeoJSON = {
+      "type": "FeatureCollection",
+      "features": [
+        {"type": "Feature", "id": "PAK", "properties": {"name": "Pakistan"}, "geometry": {"type": "Polygon", "coordinates": [[[61,25],[68,24],[70,28],[75,32],[77,35],[74,37],[71,36],[61,29],[61,25]]]}},
+        {"type": "Feature", "id": "IND", "properties": {"name": "India"}, "geometry": {"type": "Polygon", "coordinates": [[[68,24],[77,8],[88,21],[92,27],[88,27],[80,30],[75,32],[70,28],[68,24]]]}},
+        {"type": "Feature", "id": "CHN", "properties": {"name": "China"}, "geometry": {"type": "Polygon", "coordinates": [[[74,37],[80,30],[100,22],[120,23],[122,30],[125,42],[130,48],[120,53],[90,45],[80,45],[74,37]]]}},
+        {"type": "Feature", "id": "USA", "properties": {"name": "United States"}, "geometry": {"type": "Polygon", "coordinates": [[[-125,48],[-124,32],[-117,32],[-106,31],[-97,26],[-81,25],[-75,35],[-67,45],[-90,49],[-125,48]]]}},
+        {"type": "Feature", "id": "IDN", "properties": {"name": "Indonesia"}, "geometry": {"type": "Polygon", "coordinates": [[[95,5],[106,-6],[115,-8],[125,-9],[140,-3],[140,2],[118,4],[95,5]]]}},
+        {"type": "Feature", "id": "BRA", "properties": {"name": "Brazil"}, "geometry": {"type": "Polygon", "coordinates": [[[-73,-7],[-53,-33],[-35,-5],[-50,4],[-60,3],[-73,-7]]]}},
+        {"type": "Feature", "id": "RUS", "properties": {"name": "Russia"}, "geometry": {"type": "Polygon", "coordinates": [[[20,55],[30,60],[60,68],[100,75],[170,65],[130,48],[90,50],[50,50],[30,50],[20,55]]]}}
+      ]
+    };
+
+    const width = 850, height = 480;
+    const svg = d3.select("#chart").append("svg").attr("width", width).attr("height", height);
+    const projection = d3.geoNaturalEarth1().scale(150).translate([width / 2, height / 2]);
+    const path = d3.geoPath().projection(projection);
+    const tooltip = d3.select("#tooltip");
+
+    const popMap = new Map(populationData.map(d => [d.id, d.population_millions]));
+
+    const colorScale = d3.scaleSequential(d3.interpolateBlues)
+      .domain([0, Math.sqrt(1430)]); // Square root transform for visual balance
+
+    d3.select("#gradient").style("background", "linear-gradient(to right, #deebf7, #08519c)");
+
+    svg.selectAll(".country")
+      .data(worldGeoJSON.features)
+      .enter().append("path")
+      .attr("class", "country")
+      .attr("d", path)
+      .attr("fill", d => {
+        const val = popMap.get(d.id);
+        return val ? colorScale(Math.sqrt(val)) : "#cbd5e1";
+      })
+      .on("mouseover", (event, d) => {
+        const val = popMap.get(d.id);
+        tooltip.style("opacity", 1)
+               .html(`<strong>${d.properties.name}</strong><br/>
+                      ${val ? `Population: ${val}M` : 'No Data'}`);
+      })
+      .on("mousemove", (event) => {
+        tooltip.style("left", (event.pageX + 12) + "px")
+               .style("top", (event.pageY - 28) + "px");
+      })
+      .on("mouseout", () => tooltip.style("opacity", 0));
+  </script>
+</body>
+</html>
