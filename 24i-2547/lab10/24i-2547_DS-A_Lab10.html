@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 10 – Capital air, 2025 (PM2.5 time series)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --fog:#e7ebf1; --paper:#f7f9fc; --ink:#1c2634; --mute:#5f6b7c; --rule:#cfd6e0;
+  --city:#2b3a67; --sub:#1f8f8a; --alert:#b3321f; --ok:#2e7d4f;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fog);color:var(--ink);font:16px/1.6 var(--sans)}
+header{background:var(--ink);color:#eef2f8;padding:44px 24px 36px}
+header .in,main{max-width:1000px;margin:0 auto}
+header h1{font:600 clamp(30px,5vw,50px)/1.08 var(--serif);margin:0 0 10px;letter-spacing:-.01em}
+header p{margin:0;max-width:62ch;color:#b9c4d6}
+header .id{margin-top:18px;font-size:13px;color:#8d9ab0}
+main{padding:28px 16px 80px}
+section.task{background:var(--paper);border-left:6px solid var(--city);margin:0 0 28px;padding:22px 22px 18px}
+section.task h2{font:600 24px/1.25 var(--serif);margin:0 0 4px}
+.q{color:var(--mute);margin:0 0 14px;font-style:italic;font-family:var(--serif);font-size:18px}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px}
+.chip{background:#fff;border:1px solid var(--rule);padding:6px 12px;font-size:14px}
+.chip b{font-size:20px;font-family:var(--serif);margin-right:4px}
+.chip.alert b{color:var(--alert)} .chip.ok b{color:var(--ok)}
+svg{width:100%;height:auto;display:block;overflow:visible}
+.axis text{font:12px var(--sans);fill:var(--mute)} .axis path,.axis line{stroke:#9aa5b5}
+.grid line{stroke:#dfe4ec} .grid path{display:none}
+.axlabel{font:12px var(--sans);fill:var(--mute)}
+.note{font-size:14px;color:var(--mute);margin:10px 0 0;max-width:80ch}
+.note b{color:var(--ink)}
+.lbl{font:600 12px var(--sans)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:14px;margin:6px 0 4px}
+.legend i{display:inline-block;width:14px;height:14px;margin-right:6px;vertical-align:-2px}
+.legend i.ln{height:3px;vertical-align:4px;width:22px}
+table.facts{border-collapse:collapse;font-size:15px;margin:6px 0 10px}
+table.facts td,table.facts th{border-bottom:1px solid var(--rule);padding:5px 18px 5px 0;text-align:left}
+table.facts th{font-weight:500;color:var(--mute)}
+#tip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;padding:7px 10px;font-size:13px;line-height:1.45;opacity:0;z-index:9;max-width:240px;transition:opacity .08s}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 8px}
+button{font:500 14px var(--sans);padding:7px 14px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+button:hover{background:var(--ink);color:#fff} button:focus-visible{outline:3px solid var(--city);outline-offset:2px}
+.brush .selection{fill:var(--city);fill-opacity:.18;stroke:var(--city)}
+#loaderr{background:#fde8e4;border:1px solid var(--alert);padding:14px;margin:16px 0}
+.qa h2{font:600 28px var(--serif);margin:36px 0 14px}
+.qa article{background:var(--paper);padding:14px 20px;margin:0 0 12px;border-left:6px solid var(--sub)}
+.qa h3{font:600 17px var(--sans);margin:0 0 4px}
+.qa p{margin:0 0 6px;font-size:15px}
+.qa .ref{color:var(--mute);font-size:13px}
+@media (max-width:600px){section.task{padding:16px 12px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><div class="in">
+  <h1>Capital air in 2025: when PM2.5 turned dangerous</h1>
+  <p>Daily fine-particle readings at a city-centre and a suburb station, prepared for the Smog Action Committee. Each chart answers one question about time.</p>
+  <div class="id">Data Analysis and Visualization · Lab 10 · Muhammad Saad Sabir · 24i-2547 · DS-A</div>
+</div></header>
+
+<main>
+<div id="loaderr" hidden><b>The data did not load.</b> Open this page through a local server (for example VS Code Live Server), not by double-clicking the file. Keep <code>dataset/air_quality_2025.csv</code> next to the HTML file.</div>
+
+<section class="task" id="s1">
+  <h2>Task 1 – What is in the file?</h2>
+  <p class="q">How many rows are there, and do they cover every day of 2025?</p>
+  <table class="facts" id="facts"></table>
+  <p class="note" id="t1note"></p>
+</section>
+
+<section class="task" id="s2">
+  <h2>Task 2 – City PM2.5 through the year</h2>
+  <p class="q">How did PM2.5 in the city centre change through 2025?</p>
+  <div class="chips" id="t2chips"></div>
+  <div id="c2"></div>
+  <p class="note">Dashed lines: WHO 24-hour guideline (15 µg/m³) and interim target 1 (75 µg/m³). The grey band is the sensor outage; the line is broken there on purpose.</p>
+</section>
+
+<section class="task" id="s3">
+  <h2>Task 3 – How unhealthy days built up</h2>
+  <p class="q">How quickly did days above 75 µg/m³ pile up during the year?</p>
+  <div id="c3"></div>
+  <p class="note" id="t3note"></p>
+</section>
+
+<section class="task" id="s4">
+  <h2>Task 4 – City centre against suburb</h2>
+  <p class="q">Does the suburb behave like the city centre?</p>
+  <div class="legend"><span><i class="ln" style="background:var(--city)"></i>City centre</span><span><i class="ln" style="background:var(--sub)"></i>Suburb</span></div>
+  <div id="c4"></div>
+  <p class="note" id="t4note"></p>
+</section>
+
+<section class="task" id="s5">
+  <h2>Task 5 – Pollution levels, month by month</h2>
+  <p class="q">In each month, how are the days split between pollution levels?</p>
+  <div class="legend" id="lg5"></div>
+  <div id="c5"></div>
+  <p class="note" id="t5note"></p>
+</section>
+
+<section class="task" id="s6">
+  <h2>Task 6 – Month or weekday?</h2>
+  <p class="q">Is pollution tied to the day of the week, the month, or both?</p>
+  <div id="c6"></div>
+  <p class="note" id="t6note"></p>
+</section>
+
+<section class="task" id="s7">
+  <h2>Task 7 – Best day to worst day</h2>
+  <p class="q">How wide is the gap between the best and worst day in each month?</p>
+  <div class="legend"><span><i style="background:#d9a27a;opacity:.6"></i>Minimum to maximum</span><span><i class="ln" style="background:var(--city)"></i>Monthly mean</span></div>
+  <div id="c7"></div>
+  <p class="note" id="t7note"></p>
+</section>
+
+<section class="task" id="s8">
+  <h2>Task 8 – Trend without the noise, and the missing days</h2>
+  <p class="q">What is the trend once daily noise is removed, and was the sensor working all year?</p>
+  <div class="legend"><span><i class="ln" style="background:#9db0d6;height:1.5px"></i>Daily value</span><span><i class="ln" style="background:var(--city);height:4px"></i>7-day average</span></div>
+  <div id="c8"></div>
+  <p class="note" id="t8note"></p>
+</section>
+
+<section class="task" id="s9">
+  <h2>Task 9 – Pick any period and look closely</h2>
+  <p class="q">Can the Director choose a period and zoom into it?</p>
+  <div class="controls">
+    <button id="reset">Reset to full year</button>
+    <button id="goWide">Zoom to widest-spread month</button>
+    <span id="zinfo" class="note" style="margin:0"></span>
+  </div>
+  <div id="c9"></div>
+  <p class="note">Drag across the small overview at the bottom (or drag its edges) to choose dates. The y-axis stays fixed so zoomed views stay comparable.</p>
+</section>
+
+<div class="qa">
+<h2>Answers for the Director</h2>
+<article><h3>Seasonality</h3>
+<p>Worst: February (mean 141.9 µg/m³), December (138.8) and January (137.6). Best: July (27.1), then June (32.7) and August (36.9). February is about 5.2 times July.</p><span class="ref">Task 7 band chart, Task 6 heatmap right-hand column.</span></article>
+
+<article><h3>Anomalies</h3>
+<p>Highest: 8 Nov (320.0) and 18 May (245.0). Both are isolated one-day spikes, not part of the seasonal curve. On 8 Nov the neighbours are 155.9 (day before) and 115.0 (day after), so the spike is more than twice either. 18 May sits in a month averaging 59.9, about four times the monthly mean, with 50.9 the day before and 55.3 after. Possible causes (hypotheses, the data cannot prove them): crop-residue or waste burning, an industrial or landfill fire, a dust storm (18 May was a hot day, 32.4 °C), fireworks, or a temperature inversion trapping smoke for a day. The third highest, 24 Feb (237.8), is also a spike.</p><span class="ref">Task 2 labelled points, Task 8 daily line.</span></article>
+
+<article><h3>Guideline</h3>
+<p>355 of 356 recorded days (99.7%) were above 15 µg/m³. 188 days (52.8%) were above 75 µg/m³. Only one day met the WHO guideline. Out of all 365 calendar days the shares are 97.3% and 51.5%.</p><span class="ref">Task 2 chips.</span></article>
+
+<article><h3>Build-up</h3>
+<p>Fastest: January (31 new days), December (31), November (30) and February (28 of 28 days), since every recorded day in these months was above 75. The curve is steepest from January to February and again from October to December. It goes flat in June, July and August, with 0 new days, staying at 100 from the end of May until 1 September.</p><span class="ref">Task 3 area chart.</span></article>
+
+<article><h3>Comparison</h3>
+<p>Yes, the shape is the same (correlation 0.98) with the suburb about 20% lower on average. The suburb exceeded the city on only 5 days. The gap is widest in winter, with monthly mean gaps of 32.7 µg/m³ in February and 27.4 in January, and narrowest in July (5.2). The largest single-day difference is 24 Feb: city 237.8 against suburb 157.3.</p><span class="ref">Task 4 two-line chart.</span></article>
+
+<article><h3>Composition</h3>
+<p>Severe days (above 150) occur in Jan (9), Feb (8), Mar (1), May (1), Oct (2), Nov (5) and Dec (11), 37 in total. July has the most Low days (28). Month lengths differ for two reasons: February has 28 calendar days, and April, June, September and November have 30. March shows only 22 days because 9 days (12–20 March) are missing.</p><span class="ref">Task 5 stacked bars, with dashed outlines marking full month length.</span></article>
+
+<article><h3>Pattern</h3>
+<p>Mostly by month. Weekday averages run from 80.6 (Saturday) to 90.4 (Tuesday), a spread of under 10 µg/m³, while monthly averages run from 27 to 142. Weekends are only slightly cleaner. The few odd cells (February Monday 202, May Sunday 110, November Saturday 164) are the 24 Feb, 18 May and 8 Nov spikes, since each cell holds only four or five days. This points to weather and season (cold, still winter air, heating, burning) rather than a weekday traffic or factory schedule. Temperature and city PM2.5 have a correlation of −0.76.</p><span class="ref">Task 6 heatmap.</span></article>
+
+<article><h3>Spread</h3>
+<p>November has the widest gap: 80.9 to 320.0, a range of 239.1 µg/m³. May is next (31.4 to 245.0, range 213.6). A monthly mean hides this because one spike barely moves the average. November's mean of 129 looks like a steady "bad" month and says nothing about a 320 day.</p><span class="ref">Task 7 band chart.</span></article>
+
+<article><h3>Trend and data quality</h3>
+<p>Only a seasonal cycle. The 7-day average falls from about 140 in winter to a July low and climbs back. December's mean (138.8) matches January's (137.6), so the year ends where it began. One year of data cannot show a long-term rise or fall. 9 days are missing (12–20 March, sensor offline). A line drawn straight across would invent a smooth fall between 162.9 (11 Mar) and 144.0 (21 Mar) and hide that nothing was measured. Averaging across it would mix days from either side of an unobserved week.</p><span class="ref">Task 8 chart with shaded gap.</span></article>
+
+<article><h3>Zoom</h3>
+<p>Zoom into November. The 8 Nov peak is a single day: 155.9 the day before, 320.0, then 115.0 the day after. The full-year chart makes it look like part of the winter plateau. Zoomed in, each day has its own dot and the hover shows exact values.</p><span class="ref">Task 9, "Zoom to widest-spread month".</span></article>
+
+<article><h3>Chart choice</h3>
+<p>The pie of monthly averages could not show (1) order or direction: which month comes first, whether pollution is rising or falling, or that it peaks in winter and bottoms in July. It also could not show (2) extremes, gaps and thresholds: the 320 spike, the 9 missing days, or how many days broke 15 and 75. A pie also suggests the months are parts of one whole, which averages are not.</p><span class="ref">Tasks 2, 7, 8.</span></article>
+
+<article><h3>Recommendation</h3>
+<p>December and January. They are consecutive, every recorded day in both was above 75 µg/m³ (31 each, Task 3), and they have the most Severe days (11 + 9 = 20 of the year's 37, Task 5). Their means (138.8 and 137.6) are also among the highest (Task 7), and the 7-day average stays high through both (Task 8). February has the highest mean (141.9) but only 28 days and 8 Severe days, so it is a close third. If the committee's school calendar allows a swap, February is the alternative.</p><span class="ref">Tasks 3, 5, 7, 8.</span></article>
+</div>
+</main>
+<div id="tip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="lab10.js"></script>
+</body>
+</html>
