@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>D3.js Lab 8: Interactive Guide</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f7fb;--card:#fff;--tx:#111827;--mu:#5b6475;--bd:#dde1ea;--ac:#1d4ed8;--code:#0f172a;--codetx:#e2e8f0;
+--d3:#1d4ed8;--svg:#0f766e;--js:#b45309;--html:#c2410c;--val:#475569}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1117;--card:#171b24;--tx:#e8ebf2;--mu:#98a1b3;--bd:#2b3140;--ac:#6ea0ff;--code:#0a0d13;--d3:#6ea0ff;--svg:#2dd4bf;--js:#fbbf24;--html:#fb923c;--val:#a3adc2}}
+:root[data-theme="dark"]{--bg:#0e1117;--card:#171b24;--tx:#e8ebf2;--mu:#98a1b3;--bd:#2b3140;--ac:#6ea0ff;--code:#0a0d13;--d3:#6ea0ff;--svg:#2dd4bf;--js:#fbbf24;--html:#fb923c;--val:#a3adc2}
+*{box-sizing:inherit}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:22px 18px 8px;max-width:980px;margin:auto}h1{margin:0 0 4px;font-size:1.6rem}header p{margin:0;color:var(--mu)}
+nav{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;display:flex;gap:6px;padding:10px 18px;max-width:980px;margin:auto;overflow-x:auto}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+nav button,.btn{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap}
+nav button.on,.btn.on{background:var(--ac);border-color:var(--ac);color:#fff}
+main{max-width:980px;margin:auto;padding:6px 18px 50px}section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin:12px 0}
+h2{font-size:1.25rem;margin:18px 0 6px}h3{margin:0 0 6px;font-size:1.05rem}.mu{color:var(--mu)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+pre{background:var(--code);color:var(--codetx);padding:12px;border-radius:10px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;margin:8px 0}
+code{font:13px ui-monospace,Menlo,Consolas,monospace}
+.tag{display:inline-block;color:#fff;border-radius:6px;padding:1px 8px;font-size:.78rem;font-weight:600}
+.t-d3{background:var(--d3)}.t-svg{background:var(--svg)}.t-js{background:var(--js)}.t-html{background:var(--html)}.t-val{background:var(--val)}
+.layer{width:100%;text-align:left;border:2px solid;border-radius:10px;padding:10px 12px;margin:6px 0;cursor:pointer;font:inherit;color:var(--tx);background:var(--card)}
+.layer.on{box-shadow:0 0 0 3px color-mix(in srgb,currentColor 25%,transparent)}
+.tok{cursor:pointer;border-radius:5px;padding:1px 3px;border:1px solid transparent}.tok:hover{border-color:currentColor}
+.k-d3{color:var(--d3);background:color-mix(in srgb,var(--d3) 12%,transparent)}.k-svg{color:var(--svg);background:color-mix(in srgb,var(--svg) 12%,transparent)}
+.k-js{color:var(--js);background:color-mix(in srgb,var(--js) 12%,transparent)}.k-html{color:var(--html);background:color-mix(in srgb,var(--html) 12%,transparent)}
+.k-val{color:var(--val);background:color-mix(in srgb,var(--val) 12%,transparent)}
+.codeline{font:15px ui-monospace,Menlo,Consolas,monospace;padding:10px;background:var(--bg);border-radius:8px;overflow-x:auto;white-space:nowrap}
+.say{min-height:44px;margin-top:8px;padding:8px 12px;border-left:4px solid var(--ac);background:var(--bg);border-radius:6px}
+svg text{fill:var(--tx);font-size:12px}svg .domain,svg .tick line{stroke:var(--mu)}
+.chartbox svg{width:100%;height:auto;display:block}
+select,input[type=text],textarea{font:inherit;background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:6px 8px}
+.ok{color:#15803d}.bad{color:#dc2626}.steps{display:flex;gap:6px;flex-wrap:wrap}
+.dev{background:var(--code);color:var(--codetx);border-radius:10px;padding:10px;font:13px ui-monospace,Menlo,Consolas,monospace;min-height:90px}
+.err{color:#f87171}.good{color:#4ade80}
+.dtabs{display:flex;gap:4px;margin-bottom:6px}.dtabs .btn{border-radius:6px;padding:3px 12px;font-size:.85rem}
+details{margin-top:8px}summary{cursor:pointer;color:var(--ac)}
+</style></head><body>
+<header><h1>🐧 D3.js Lab 8: Interactive Guide</h1><p>Data Analysis &amp; Visualization · FAST School of Computing. Learn it, play with it, then copy the code.</p></header>
+<nav id="nav"></nav>
+<main>
+
+<section id="s-learn">
+<div class="card"><h3>What is D3?</h3>
+<p><b>D3</b> = <b>D</b>ata-<b>D</b>riven <b>D</b>ocuments. It is a JavaScript library, but <b>not a charting tool</b>: there is no <code>bar()</code> button. D3 connects your <b>data</b> to <b>elements on the page</b>. One row of data → one shape (rect, circle, line, text). You use the data to decide size, position and colour. A bar chart is simply rectangles whose heights come from your numbers.</p></div>
+
+<h2>The layers (click one)</h2>
+<div class="card" id="layers"></div>
+
+<h2>Who owns each part of a line? (hover or tap the pieces)</h2>
+<div class="card"><div class="row" id="legend"></div><div id="lines"></div>
+<div class="say" id="say">Tap any coloured piece to see which layer it belongs to.</div>
+<p class="mu" style="margin:8px 0 0"><b>Tip:</b> the first word inside <code>.attr("…")</code> is always an SVG attribute name.</p></div>
+
+<h2>D3 vs. what you already know</h2>
+<div class="card" style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:520px" id="cmp"></table>
+<p class="mu">D3 needs more code, and that is the trade-off: total control. The goal is not to replace Power BI, it is to understand visualization deeply and build what other tools can’t.</p></div>
+</section>
+
+<section id="s-t1">
+<div class="card"><b>Scenario:</b> You work at a research station in Antarctica. The manager asks: <i>“Which penguin species is the heaviest, and does the same species also have the longest flippers? Show me in one chart that highlights the answer.”</i></div>
+<div class="steps" id="steps1"></div>
+<div class="grid">
+ <div class="card"><div id="stepinfo"></div><div id="controls" class="row" style="margin-top:10px"></div></div>
+ <div class="card chartbox"><div id="c1"></div><div class="mu" id="c1info"></div></div>
+</div>
+<div class="card" id="q5" style="display:none"><h3>Step 5: Explain it back</h3><div id="qs"></div></div>
+<div class="card"><h3>Live code (updates as you change settings)</h3><pre id="live"></pre></div>
+</section>
+
+<section id="s-t2">
+<div class="card"><b>Goal:</b> two charts on one page: body mass by species, and number of penguins per island. You copied <code>penguin.html</code>, added a second <code>&lt;svg&gt;</code>, pasted the script again… <b>and it doesn’t work.</b> Investigate using the three DevTools tabs <i>before</i> editing code.</div>
+<div class="steps" id="stage"></div>
+<div class="grid">
+ <div class="card"><div class="dtabs" id="dtabs"></div><div class="dev" id="dev"></div>
+  <div id="why" class="say"></div></div>
+ <div class="card chartbox"><div id="a1"></div><div id="a2"></div></div>
+</div>
+<div class="card"><h3>Answer in one sentence each</h3><div id="q2"></div></div>
+</section>
+
+<section id="s-code">
+<p class="mu">These are the finished files. Save them as <code>penguin.html</code> and <code>two-charts.html</code> next to a <code>dataset/penguins.csv</code> folder, then open with VS Code Live Server. Submit the .html + cleaned dataset on <b>GCR</b> (<code>RollNumber_Section_LabXX.zip</code>) and <b>GitHub</b> (<code>RollNumber_Section</code> subfolder).</p>
+<div id="codes"></div>
+<div class="card"><h3>Submission checklist</h3><div id="chk"></div></div>
+</section>
+</main>
+
+<script>
+const RAW="AT3750,181;AT3800,186;AT3250,195;AT3450,193;AT3650,190;AT3625,181;AT4675,195;AT3475,193;AT4250,190;AT3300,186;AT3700,180;AT3200,182;AT3800,191;AT4400,198;AT3700,185;AT3450,195;AT4500,197;AT3325,184;AT4200,194;AB3400,174;AB3600,180;AB3800,189;AB3950,185;AB3800,180;AB3800,187;AB3550,183;AB3200,187;AB3150,172;AB3950,180;AD3250,178;AD3900,178;AD3300,188;AD3900,184;AD3325,195;AD4150,196;AD3950,190;AD3550,180;AD3300,181;AD4650,184;AD3150,182;AD3900,195;AD3100,186;AD4400,196;AD3000,185;AD4600,190;AD3425,182;AD2975,179;AD3450,190;AD4150,191;AB3500,186;AB4300,188;AB3450,190;AB4050,200;AB2900,187;AB3700,191;AB3550,186;AB3800,193;AB2850,181;AB3750,194;AB3150,185;AB4400,195;AB3600,185;AB4050,192;AB2850,184;AB3950,192;AB3350,195;AB4100,188;AT3050,190;AT4450,198;AT3600,190;AT3900,190;AT3550,196;AT4150,197;AT3700,190;AT4250,195;AT3700,191;AT3900,184;AT3550,187;AT4000,195;AT3200,189;AT4700,196;AT3800,187;AT4200,193;AD3350,191;AD3550,194;AD3800,190;AD3500,189;AD3950,189;AD3600,190;AD3550,202;AD4300,205;AD3400,185;AD4450,186;AD3300,187;AD4300,208;AD3700,190;AD4350,196;AD2900,178;AD4100,192;AB3725,192;AB4725,203;AB3075,183;AB4250,190;AB2925,193;AB3550,184;AB3750,199;AB3900,190;AB3175,181;AB4775,197;AB3825,198;AB4600,191;AB3200,193;AB4275,197;AB3900,191;AB4075,196;AT2900,188;AT3775,199;AT3350,189;AT3325,189;AT3150,187;AT3500,198;AT3450,176;AT3875,202;AT3050,186;AT4000,199;AT3275,191;AT4300,195;AT3050,191;AT4000,210;AT3325,190;AT3500,197;AD3500,193;AD4475,199;AD3425,187;AD3900,190;AD3175,191;AD3975,200;AD3400,185;AD4250,193;AD3400,193;AD3475,187;AD3050,188;AD3725,190;AD3000,192;AD3650,185;AD4250,190;AD3475,184;AD3450,195;AD3750,193;AD3700,187;AD4000,201;CD3500,192;CD3900,196;CD3650,193;CD3525,188;CD3725,197;CD3950,198;CD3250,178;CD3750,197;CD4150,195;CD3700,198;CD3800,193;CD3775,194;CD3700,185;CD4050,201;CD3575,190;CD4050,201;CD3300,197;CD3700,181;CD3450,190;CD4400,195;CD3600,181;CD3400,191;CD2900,187;CD3800,193;CD3300,195;CD4150,197;CD3400,200;CD3800,200;CD3700,191;CD4550,205;CD3200,187;CD4300,201;CD3350,187;CD4100,203;CD3600,195;CD3900,199;CD3850,195;CD4800,210;CD2700,192;CD4500,205;CD3950,210;CD3650,187;CD3550,196;CD3500,196;CD3675,196;CD4450,201;CD3400,190;CD4300,212;CD3250,187;CD3675,198;CD3325,199;CD3950,201;CD3600,193;CD4050,203;CD3350,187;CD3450,197;CD3250,191;CD4050,203;CD3800,202;CD3525,194;CD3950,206;CD3650,189;CD3650,195;CD4000,207;CD3400,202;CD3775,193;CD4100,210;CD3775,198;GB4500,211;GB5700,230;GB4450,210;GB5700,218;GB5400,215;GB4550,210;GB4800,211;GB5200,219;GB4400,209;GB5150,215;GB4650,214;GB5550,216;GB4650,214;GB5850,213;GB4200,210;GB5850,217;GB4150,210;GB6300,221;GB4800,209;GB5350,222;GB5700,218;GB5000,215;GB4400,213;GB5050,215;GB5000,215;GB5100,215;GB4100,216;GB5650,215;GB4600,210;GB5550,220;GB5250,222;GB4700,209;GB5050,207;GB6050,230;GB5150,220;GB5400,220;GB4950,213;GB5250,219;GB4350,208;GB5350,208;GB3950,208;GB5700,225;GB4300,210;GB4750,216;GB5550,222;GB4900,217;GB4200,210;GB5400,225;GB5100,213;GB5300,215;GB4850,210;GB5300,220;GB4400,210;GB5000,225;GB4900,217;GB5050,220;GB4300,208;GB5000,220;GB4450,208;GB5550,224;GB4200,208;GB5300,221;GB4400,214;GB5650,231;GB4700,219;GB5700,230;GB4650,214;GB5800,229;GB4700,220;GB5550,223;GB4750,216;GB5000,221;GB5100,221;GB5200,217;GB4700,216;GB5800,230;GB4600,209;GB6000,220;GB4750,215;GB5950,223;GB4625,212;GB5450,221;GB4725,212;GB5350,224;GB4750,212;GB5600,228;GB4600,218;GB5300,218;GB4875,212;GB5550,230;GB4950,218;GB5400,228;GB4750,212;GB5650,224;GB4850,214;GB5200,226;GB4925,216;GB4875,222;GB4625,203;GB5250,225;GB4850,219;GB5600,228;GB4975,215;GB5500,228;GB4725,216;GB5500,215;GB4700,210;GB5500,219;GB4575,208;GB5500,209;GB5000,216;GB5950,229;GB4650,213;GB5500,230;GB4375,217;GB5850,230;GB4875,217;GB6000,222;GB4925,214;GB4850,215;GB5750,222;GB5200,212;GB5400,213",SP={A:"Adelie",C:"Chinstrap",G:"Gentoo"},IS={B:"Biscoe",D:"Dream",T:"Torgersen"};
+const DATA=RAW.split(";").map(s=>{const[a,b]=s.slice(3).split(",");return{species:SP[s[0]],island:IS[s[1]],body_mass_g:+s.slice(2,2)||+a,flipper_length_mm:+b}});
+// fix parse: first char species, second island, rest "mass,flipper"
+DATA.forEach((d,i)=>{const s=RAW.split(";")[i];d.body_mass_g=+s.slice(2).split(",")[0];d.flipper_length_mm=+s.slice(2).split(",")[1]});
+const FILES={"penguin.html": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Penguins: Lab Task 1<\/title>\n  <script src=\"https://d3js.org/d3.v7.min.js\"><\/script>\n  <style>\n    body { font-family: sans-serif; margin: 20px; }\n    .value { font-size: 12px; text-anchor: middle; }\n  <\/style>\n<\/head>\n<body>\n  <h1>Average body mass by species<\/h1>\n  <svg id=\"chart\" width=\"600\" height=\"400\"><\/svg>\n\n  <script>\n    // Step 3: change metric to \"flipper_length_mm\"\n    // Step 4: change groupBy to \"island\"\n    const groupBy = \"species\";\n    const metric  = \"body_mass_g\";\n\n    const margin = { top: 20, right: 20, bottom: 40, left: 60 };\n    const width = 600, height = 400;\n    const innerWidth  = width  - margin.left - margin.right;\n    const innerHeight = height - margin.top  - margin.bottom;\n\n    const svg = d3.select(\"#chart\");\n    const g = svg.append(\"g\")\n      .attr(\"transform\", `translate(${margin.left},${margin.top})`);\n\n    d3.csv(\"dataset/penguins.csv\", d3.autoType).then(data => {\n      data = data.filter(d => d[metric] != null);\n\n      // one number per group: the average\n      const avg  = d3.rollup(data, v => d3.mean(v, d => d[metric]), d => d[groupBy]);\n      const rows = Array.from(avg, ([name, avgMass]) => ({ name, avgMass }));\n      const maxVal = d3.max(rows, d => d.avgMass);\n\n      const x = d3.scaleBand()\n        .domain(rows.map(d => d.name))\n        .range([0, innerWidth])\n        .padding(0.3);\n\n      const y = d3.scaleLinear()\n        .domain([0, maxVal]).nice()\n        .range([innerHeight, 0]);\n\n      g.append(\"g\").attr(\"transform\", `translate(0,${innerHeight})`).call(d3.axisBottom(x));\n      g.append(\"g\").call(d3.axisLeft(y));\n\n      g.selectAll(\"rect\").data(rows).join(\"rect\")\n        .attr(\"x\", d => x(d.name))\n        .attr(\"y\", d => y(d.avgMass))\n        .attr(\"width\", x.bandwidth())\n        .attr(\"height\", d => innerHeight - y(d.avgMass))   // decides how tall each bar is\n        .attr(\"fill\", d => d.avgMass === maxVal ? \"red\" : \"steelblue\");\n\n      g.selectAll(\".value\").data(rows).join(\"text\")\n        .attr(\"class\", \"value\")\n        .attr(\"x\", d => x(d.name) + x.bandwidth() / 2)\n        .attr(\"y\", d => y(d.avgMass) - 5)\n        .text(d => Math.round(d.avgMass));\n    });\n  <\/script>\n<\/body>\n<\/html>\n", "two-charts.html": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <title>Two charts: Lab Task 2<\/title>\n  <script src=\"https://d3js.org/d3.v7.min.js\"><\/script>\n  <style>\n    body { font-family: sans-serif; margin: 20px; }\n    .value { font-size: 12px; text-anchor: middle; }\n  <\/style>\n<\/head>\n<body>\n  <h1>Body mass by species<\/h1>\n  <svg id=\"chart1\" width=\"600\" height=\"400\"><\/svg>\n\n  <h1>Number of penguins per island<\/h1>\n  <svg id=\"chart2\" width=\"600\" height=\"400\"><\/svg>   <!-- FIX 2: unique id -->\n\n  <script>\n    // FIX 1: no top-level const names repeated. Everything lives inside one function.\n    function drawBar(svgId, map, color) {\n      const margin = { top: 20, right: 20, bottom: 40, left: 60 };\n      const innerWidth = 600 - margin.left - margin.right;\n      const innerHeight = 400 - margin.top - margin.bottom;\n      const rows = Array.from(map, ([name, val]) => ({ name, val }));\n\n      const g = d3.select(\"#\" + svgId).append(\"g\")      // FIX 2: select the right svg\n        .attr(\"transform\", `translate(${margin.left},${margin.top})`);\n\n      const x = d3.scaleBand().domain(rows.map(d => d.name)).range([0, innerWidth]).padding(0.3);\n      const y = d3.scaleLinear().domain([0, d3.max(rows, d => d.val)]).nice().range([innerHeight, 0]);\n\n      g.append(\"g\").attr(\"transform\", `translate(0,${innerHeight})`).call(d3.axisBottom(x));\n      g.append(\"g\").call(d3.axisLeft(y));\n\n      g.selectAll(\"rect\").data(rows).join(\"rect\")\n        .attr(\"x\", d => x(d.name)).attr(\"y\", d => y(d.val))\n        .attr(\"width\", x.bandwidth()).attr(\"height\", d => innerHeight - y(d.val))\n        .attr(\"fill\", color);\n\n      g.selectAll(\".value\").data(rows).join(\"text\").attr(\"class\", \"value\")\n        .attr(\"x\", d => x(d.name) + x.bandwidth() / 2).attr(\"y\", d => y(d.val) - 5)\n        .text(d => Math.round(d.val));\n    }\n\n    d3.csv(\"dataset/penguins.csv\", d3.autoType).then(data => {\n      drawBar(\"chart1\", d3.rollup(data, v => d3.mean(v, d => d.body_mass_g), d => d.species), \"steelblue\");\n      drawBar(\"chart2\", d3.rollup(data, v => v.length, d => d.island), \"seagreen\");\n    });\n  <\/script>\n<\/body>\n<\/html>\n"};
+const $=id=>document.getElementById(id);
+const TABS=[["learn","1 · Learn"],["t1","2 · Task 1"],["t2","3 · Task 2: Debug"],["code","4 · Code"]];
+function show(t){TABS.forEach(([k])=>{$("s-"+k).classList.toggle("on",k===t)});[...$("nav").children].forEach((b,i)=>b.classList.toggle("on",TABS[i][0]===t))}
+TABS.forEach(([k,l])=>{const b=document.createElement("button");b.textContent=l;b.onclick=()=>show(k);$("nav").append(b)});
+
+/* ---------- reusable D3 bar chart ---------- */
+function bar(el,rows,o={}){
+  const W=600,H=360,m={top:24,right:16,bottom:36,left:56},iw=W-m.left-m.right,ih=H-m.top-m.bottom;
+  el.innerHTML="";const svg=d3.select(el).append("svg").attr("viewBox",`0 0 ${W} ${H}`);
+  const g=svg.append("g").attr("transform",`translate(${m.left},${m.top})`);
+  const mx=d3.max(rows,d=>d.v),x=d3.scaleBand().domain(rows.map(d=>d.n)).range([0,iw]).padding(.3);
+  const y=d3.scaleLinear().domain([0,mx]).nice().range(o.flip?[0,ih]:[ih,0]);
+  g.append("g").attr("transform",`translate(0,${ih})`).call(d3.axisBottom(x));g.append("g").call(d3.axisLeft(y).ticks(6));
+  const top=o.flip?d=>0:d=>y(d.v),hh=o.flip?d=>y(d.v):d=>ih-y(d.v);
+  g.selectAll("rect").data(rows).join("rect").attr("x",d=>x(d.n)).attr("y",top).attr("width",x.bandwidth()).attr("height",hh)
+   .attr("fill",d=>o.hi&&d.v===mx?"#dc2626":(o.color||"steelblue")).style("cursor","pointer")
+   .append("title").text(d=>d.n+": "+Math.round(d.v));
+  g.selectAll(".v").data(rows).join("text").attr("class","v").attr("text-anchor","middle").attr("x",d=>x(d.n)+x.bandwidth()/2).attr("y",d=>(o.flip?hh(d):y(d.v))-5).text(d=>Math.round(d.v));
+  return svg.node();
+}
+const avg=(k,f)=>[...d3.rollup(DATA,v=>d3.mean(v,d=>d[f]),d=>d[k])].map(([n,v])=>({n,v}));
+const cnt=k=>[...d3.rollup(DATA,v=>v.length,d=>d[k])].map(([n,v])=>({n,v}));
+
+/* ---------- LEARN ---------- */
+const LAY=[["DATA","dataset/penguins.csv","var(--val)","One row = one penguin. <code>d3.csv()</code> reads it (step 1). Columns: species, island, body_mass_g…"],
+["HTML","the page structure","var(--html)","Tags we use: <code>&lt;h1&gt; &lt;svg&gt; &lt;script&gt;</code>. The <code>&lt;script&gt;</code> tag holds your code."],
+["JavaScript","the language that runs the steps","var(--js)","<code>const</code>, <code>=&gt;</code>, <code>Math.round()</code>, <code>Array.from()</code>, <code>console.log()</code>."],
+["D3","the library that turns data into shapes","var(--d3)","<code>d3.csv() d3.rollup() d3.scaleLinear() d3.axisBottom()</code> and <code>.selectAll() .data() .join(\"rect\") .attr()</code>."],
+["SVG","the shapes you see, inside &lt;svg id=\"chart\"&gt;","var(--svg)","<code>&lt;rect&gt;</code> = one bar per row · <code>&lt;text&gt;</code> = labels · <code>&lt;g&gt;</code> = a group. Attributes: x, y, width, height, fill. D3 creates these (step 2); the browser draws them (step 3)."]];
+LAY.forEach(([t,s,c,d],i)=>{const b=document.createElement("button");b.className="layer";b.style.borderColor=c;b.style.color=c;
+ b.innerHTML=`<b>${t}</b> <span class="mu">${s}</span><div class="mu" style="display:none;margin-top:6px;color:var(--tx)">${d}</div>`;
+ b.onclick=()=>{[...$("layers").children].forEach(x=>{x.classList.remove("on");x.children[2].style.display="none"});b.classList.add("on");b.children[2].style.display="block"};$("layers").append(b)});
+$("layers").children[3].click();
+$("layers").insertAdjacentHTML("beforeend",`<p style="margin:10px 0 0"><b>D3 does not draw. D3 creates SVG shapes from data.</b> The browser draws them.</p>`);
+
+const KIND={d3:["D3","library","t-d3"],svg:["SVG","shapes","t-svg"],js:["JS","language (JavaScript)","t-js"],html:["HTML","page tags","t-html"],val:["Value","your choice","t-val"]};
+$("legend").innerHTML=Object.values(KIND).map(k=>`<span class="tag ${k[2]}">${k[0]}</span> <span class="mu">${k[1]}</span>`).join(" &nbsp; ");
+const L=[
+["1. Load D3 into the page",[["html","&lt;script src=\""],["val","https://d3js.org/d3.v7.min.js"],["html","\"&gt;&lt;/script&gt;"]],"An HTML tag loads D3, which is just a JavaScript file from the web. After this line, the word <code>d3</code> exists."],
+["2. Add a rectangle to the chart",[["js","g"],["d3",".append"],["js","("],["svg","\"rect\""],["js",")"]],"<code>g</code> is our own variable (JavaScript). <code>.append</code> is a D3 method. <code>\"rect\"</code> is the SVG shape it creates: one bar."],
+["3. Colour the bar",[["d3",".attr"],["js","("],["svg","\"fill\""],["js",", "],["val","\"steelblue\""],["js",")"]],"<code>.attr</code> is D3. <code>\"fill\"</code> is an SVG attribute name. <code>\"steelblue\"</code> is a colour value you choose."],
+["4. Set the bar’s top edge from the data",[["d3",".attr"],["js","("],["svg","\"y\""],["js",", d =&gt; "],["d3","y"],["js","(d.avgMass))"]],"For each data item <code>d</code> (JavaScript), call our <code>y</code> scale (D3) to turn its average mass into pixels, then set the SVG attribute <code>y</code>."]];
+$("lines").innerHTML=L.map(([h,t,e])=>`<h3 style="margin-top:12px">${h}</h3><div class="codeline">${t.map(([k,s])=>`<span class="tok k-${k}" data-k="${k}" data-e="${encodeURIComponent(e)}">${s}</span>`).join("")}</div>`).join("");
+$("lines").querySelectorAll(".tok").forEach(t=>{const f=()=>{const k=KIND[t.dataset.k];$("say").innerHTML=`<span class="tag ${k[2]}">${k[0]}</span> ${decodeURIComponent(t.dataset.e)}`};t.onmouseenter=f;t.onclick=f});
+$("cmp").innerHTML=[["","Python (matplotlib)","Power BI","D3.js"],["How you start","Call a chart function","Drag a visual","Draw shapes from data"],["Chart types","Ready-made","Ready-made","None, you build them"],["Design control","Medium","Low","Complete"],["Interactivity","Limited","Fixed options","Anything"],["Output","Image / notebook","Report","Web page"],["Effort","Low","Lowest","Highest"]]
+ .map((r,i)=>"<tr>"+r.map((c,j)=>`<${i?"td":"th"} style="border-bottom:1px solid var(--bd);padding:7px;text-align:left;${j==3?"color:var(--ac);font-weight:600":""}">${c}</${i?"td":"th"}>`).join("")+"</tr>").join("");
+
+/* ---------- TASK 1 ---------- */
+const S1={step:1,pred:null,checked:false,hi:false,metric:"body_mass_g",group:"species",flip:false};
+const INFO=["<b>Step 1: Predict first.</b> Before running anything, pick the species you think is heaviest. Then check the chart.",
+"<b>Step 2: Highlight the answer.</b> Make the heaviest bar red and the others blue. Expected: Gentoo is red.",
+"<b>Step 3: Answer the second question.</b> Show flipper length instead of body mass. Expected: Gentoo is tallest again → yes, same species.",
+"<b>Step 4: Change the grouping.</b> “Which island has the heaviest penguins?” Expected: Biscoe, Dream, Torgersen; Biscoe heaviest.",
+"<b>Step 5: Explain it back.</b> Answer three questions. Try the range experiment below."];
+$("steps1").innerHTML="";[1,2,3,4,5].forEach(n=>{const b=document.createElement("button");b.className="btn";b.textContent="Step "+n;b.onclick=()=>{S1.step=n;if(n==2)S1.hi=true;if(n==3){S1.hi=true;S1.metric="flipper_length_mm"}if(n==4){S1.hi=true;S1.group="island"}if(n<3)S1.metric="body_mass_g";if(n<4)S1.group="species";if(n<2)S1.hi=false;S1.flip=false;r1()};$("steps1").append(b)});
+function r1(){
+ [...$("steps1").children].forEach((b,i)=>b.classList.toggle("on",i+1===S1.step));
+ const st=S1.step;let h=INFO[st-1];
+ if(st==1){h+=`<div class="row" style="margin-top:8px">`+["Adelie","Chinstrap","Gentoo"].map(s=>`<button class="btn ${S1.pred==s?"on":""}" onclick="S1.pred='${s}';S1.checked=false;r1()">${s}</button>`).join("")+`<button class="btn" onclick="S1.checked=true;r1()">Check</button></div>`;
+  if(S1.checked&&S1.pred){const a=avg("species","body_mass_g"),w=d3.greatest(a,d=>d.v).n;h+=`<p class="${S1.pred==w?"ok":"bad"}">${S1.pred==w?"Correct!":"Not quite."} The heaviest species is <b>${w}</b>.</p>`}}
+ $("stepinfo").innerHTML=h;
+ const showChart=st>1||S1.checked;
+ $("controls").innerHTML=st>1?`<label><input type="checkbox" ${S1.hi?"checked":""} onchange="S1.hi=this.checked;r1()"> highlight max (red)</label>
+ <label>metric <select onchange="S1.metric=this.value;r1()"><option value="body_mass_g" ${S1.metric=="body_mass_g"?"selected":""}>body_mass_g</option><option value="flipper_length_mm" ${S1.metric!="body_mass_g"?"selected":""}>flipper_length_mm</option></select></label>
+ <label>groupBy <select onchange="S1.group=this.value;r1()"><option ${S1.group=="species"?"selected":""}>species</option><option ${S1.group=="island"?"selected":""}>island</option></select></label>`:"";
+ if(st==5)$("controls").innerHTML+=`<label><input type="checkbox" ${S1.flip?"checked":""} onchange="S1.flip=this.checked;r1()"> use <code>.range([0, innerHeight])</code></label>`;
+ const rows=avg(S1.group,S1.metric),n=rows.length;
+ if(showChart){const sv=bar($("c1"),rows,{hi:S1.hi,flip:S1.flip});$("c1info").innerHTML=`<b>${sv.querySelectorAll("rect").length}</b> &lt;rect&gt; elements on this chart`}
+ else{$("c1").innerHTML=`<p class="mu" style="padding:60px 10px;text-align:center">Make your prediction, then press Check.</p>`;$("c1info").textContent=""}
+ $("q5").style.display=st==5?"block":"none";
+ $("live").textContent=`const groupBy = "${S1.group}";\nconst metric  = "${S1.metric}";\n...\nconst y = d3.scaleLinear().domain([0, maxVal]).nice()\n  .range(${S1.flip?"[0, innerHeight]":"[innerHeight, 0]"});\n...\n.attr("height", d => innerHeight - y(d.avgMass))\n.attr("fill", d => ${S1.hi?'d.avgMass === maxVal ? "red" : "steelblue"':'"steelblue"'});`;
+}
+const QA=[["Which line decides how tall each bar is?",`<code>.attr("height", d =&gt; innerHeight - y(d.avgMass))</code>. The y scale converts the average into a pixel position, and the height is the distance from there down to the baseline.`],
+["What if <code>.range([innerHeight, 0])</code> became <code>.range([0, innerHeight])</code>?","The scale flips. SVG’s y-axis grows downward, so big values map to <i>large</i> y (the bottom). The chart is upside down: tall values hang from the top or get tiny heights. Tick the checkbox above to see it."],
+["How many &lt;rect&gt; elements are on the page, and why?","One <code>&lt;rect&gt;</code> per bar: <b>3</b> (3 species, or 3 islands), because <code>.data(rows).join(\"rect\")</code> makes one shape per data item. The axes and labels are <code>&lt;path&gt;</code>, <code>&lt;line&gt;</code> and <code>&lt;text&gt;</code>, not rects."]];
+$("qs").innerHTML=QA.map(([q,a],i)=>`<p><b>${i+1}. ${q}</b></p><textarea rows="2" style="width:100%" placeholder="Your one-sentence answer…"></textarea><details><summary>Reveal model answer</summary><div class="say">${a}</div></details>`).join("");
+r1();
+
+/* ---------- TASK 2 ---------- */
+let ST=0;const SM=["As copied (broken)","Fix 1: rename variables","Fix 2: unique ids"];let DT="Console";
+SM.forEach((s,i)=>{const b=document.createElement("button");b.className="btn";b.textContent=s;b.onclick=()=>{ST=i;r2()};$("stage").append(b)});
+["Console","Network","Elements"].forEach(t=>{const b=document.createElement("button");b.className="btn";b.textContent=t;b.onclick=()=>{DT=t;r2()};$("dtabs").append(b)});
+function r2(){
+ [...$("stage").children].forEach((b,i)=>b.classList.toggle("on",i===ST));[...$("dtabs").children].forEach(b=>b.classList.toggle("on",b.textContent===DT));
+ const mass=avg("species","body_mass_g"),isl=cnt("island");let c1=0,c2=0;
+ const a1=$("a1"),a2=$("a2");a1.innerHTML="<b>svg #1</b>";a2.innerHTML="<b>svg #2</b>";
+ const h1=document.createElement("div"),h2=document.createElement("div");a1.append(h1);a2.append(h2);
+ if(ST==0){bar(h1,mass);c1=3;h2.innerHTML=`<p class="mu" style="padding:30px;text-align:center">(empty: script 2 never ran)</p>`}
+ if(ST==1){bar(h1,mass);const s=h1.querySelector("svg g");const t=document.createElement("div");bar(t,isl,{color:"seagreen"});s.append(...t.querySelector("g").children);c1=6;h2.innerHTML=`<p class="mu" style="padding:30px;text-align:center">(empty: both charts went into svg #1)</p>`}
+ if(ST==2){bar(h1,mass);bar(h2,isl,{color:"seagreen"});c1=3;c2=3}
+ const ids=ST==2?["chart1","chart2"]:["chart","chart"];
+ const dev={Console:ST==0?`<span class="err">✖ Uncaught SyntaxError: Identifier 'margin' has already been declared (two-charts.html:58)</span>`:`<span class="good">No errors.</span> <span style="color:#94a3b8">(Console is silent, yet the page is still wrong in Fix 1!)</span>`.replace(ST==2?"x":"@@","")+(ST==2?"":""),
+  Network:`<span class="good">200</span> d3.v7.min.js<br><span class="good">200</span> penguins.csv<br><span style="color:#94a3b8">Both files loaded, so the problem is in <i>our</i> code, not the files or paths.</span>`,
+  Elements:`&lt;svg id="${ids[0]}"&gt; → <b>${c1}</b> &lt;rect&gt;${ST==1?' <span class="err">(3 species + 3 island bars overlapped!)</span>':""}<br>&lt;svg id="${ids[1]}"&gt; → <b>${c2}</b> &lt;rect&gt;${ids[0]==ids[1]?' <span class="err">← duplicate id!</span>':""}`};
+ if(ST==2)dev.Console=`<span class="good">No errors.</span>`;
+ $("dev").innerHTML=dev[DT];
+ $("why").innerHTML=ST==0?"<b>Bug 1.</b> Pasting the whole script twice declares <code>const margin</code>, <code>const svg</code>… twice at the top level. JavaScript refuses redeclaration, so the second script never runs.":ST==1?"<b>Bug 2.</b> Console is quiet now, but both <code>&lt;svg&gt;</code> have <code>id=\"chart\"</code>. <code>d3.select(\"#chart\")</code> always returns the <i>first</i> match, so chart 2 is drawn on top of chart 1. Only <b>Elements</b> shows this.":"<b>Fixed.</b> Unique ids (<code>chart1</code>, <code>chart2</code>) and variables kept inside a function (<code>drawBar</code>), so the two charts can’t collide.";
+}
+const A2=["Console said <code>SyntaxError: Identifier … has already been declared</code>: the same <code>const</code> name was declared twice at the top level, so script 2 was rejected.","Network was fine, so D3 and the CSV loaded and the file paths are correct. The bug is in our own code.","Elements showed both svgs had the same id and that all 6 rects landed in the first svg. The Console was silent about that.","Renamed/wrapped the variables (<code>drawBar</code> function) and gave the svgs unique ids <code>chart1</code> / <code>chart2</code>."];
+$("q2").innerHTML=["What did the Console say? What does it mean?","The Network tab was fine. What does that tell you?","What did Elements show that the Console did not?","What did you change to fix it?"].map((q,i)=>`<details><summary>${i+1}. ${q}</summary><div class="say">${A2[i]}</div></details>`).join("");
+r2();
+
+/* ---------- CODE ---------- */
+Object.entries(FILES).forEach(([n,c])=>{const d=document.createElement("div");d.className="card";
+ d.innerHTML=`<div class="row" style="justify-content:space-between"><h3 style="margin:0">${n}</h3><button class="btn">Copy</button></div><pre></pre>`;
+ d.querySelector("pre").textContent=c;const b=d.querySelector("button");
+ b.onclick=()=>{const done=()=>{b.textContent="Copied ✓";setTimeout(()=>b.textContent="Copy",1500)};
+  try{navigator.clipboard.writeText(c).then(done,()=>{sel()})}catch(e){sel()}
+  function sel(){const r=document.createRange();r.selectNodeContents(d.querySelector("pre"));const s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent="Selected: press Ctrl+C"}};
+ $("codes").append(d)});
+const CK=["Folder has the .html file(s) and dataset/penguins.csv in the structure the code expects","Tested with VS Code Live Server: chart appears, no Console errors (except favicon)","GitHub: pushed to the week’s folder, in RollNumber_Section (e.g. 24F1234_5A)","GCR: named RollNumber_Section_LabXX (zip if more than one file)"];
+$("chk").innerHTML=CK.map(c=>`<label style="display:block;margin:6px 0"><input type="checkbox"> ${c}</label>`).join("");
+show("learn");
+</script></body></html>

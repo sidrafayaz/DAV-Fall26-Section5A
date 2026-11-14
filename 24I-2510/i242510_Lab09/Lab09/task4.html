@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 4: World Population Choropleth</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Navigation header between tasks */
+    .nav-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+
+    .nav-link {
+      padding: 8px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      max-width: 1000px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Legend Bar */
+    .legend-wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 12px 18px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+
+    .legend-gradient-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .legend-label-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .legend-scale-svg {
+      overflow: visible;
+    }
+
+    .no-data-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    .no-data-swatch {
+      width: 18px;
+      height: 14px;
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+    }
+
+    /* Chart / Map SVG */
+    #chart {
+      width: 100%;
+      position: relative;
+    }
+
+    svg.map-svg {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      background-color: #f8fafc;
+      border: 1px solid var(--border);
+    }
+
+    .country {
+      cursor: pointer;
+      stroke: #cbd5e1;
+      stroke-width: 0.6px;
+      transition: stroke 0.15s, stroke-width 0.15s, filter 0.15s;
+    }
+
+    .country:hover {
+      stroke: #0f172a !important;
+      stroke-width: 2px !important;
+      filter: brightness(0.92);
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: opacity 0.15s ease;
+      line-height: 1.5;
+      z-index: 100;
+    }
+
+    .tooltip .title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .tooltip .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.2);
+      margin-bottom: 4px;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      color: #991b1b;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar for all 6 tasks -->
+  <nav class="nav-bar">
+    <a href="task1.html" class="nav-link">Task 1: Treemap</a>
+    <a href="task2.html" class="nav-link">Task 2: Dendrogram</a>
+    <a href="task3.html" class="nav-link">Task 3: Flight Network</a>
+    <a href="task4.html" class="nav-link active">Task 4: World Choropleth</a>
+    <a href="task5.html" class="nav-link">Task 5: Point Map</a>
+    <a href="task6.html" class="nav-link">Task 6: Spatial Combined</a>
+  </nav>
+
+  <div class="container">
+    <header>
+      <h1>Task 4: World Population Choropleth</h1>
+      <p class="subtitle">
+        Global geographic map colored by country population using a square-root sequential color scale.
+      </p>
+    </header>
+
+    <!-- Legend bar -->
+    <div class="legend-wrapper">
+      <div class="legend-gradient-container">
+        <span class="legend-label-title">Population (Millions) — Square Root Sequential Scale</span>
+        <svg id="legend-svg" class="legend-scale-svg" width="340" height="35"></svg>
+      </div>
+      <div class="no-data-item">
+        <span class="no-data-swatch"></span>
+        <span>Countries without data (Light Gray)</span>
+      </div>
+    </div>
+
+    <!-- Chart container -->
+    <div id="chart">
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </div>
+
+  <script>
+    const width = 940;
+    const height = 520;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("class", "map-svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    const mapGroup = svg.append("g");
+    const tooltip = d3.select("#tooltip");
+
+    // Load both population.csv and world.geojson simultaneously
+    Promise.all([
+      d3.csv("dataset/population.csv"),
+      d3.json("dataset/world.geojson")
+    ]).then(([popData, geoData]) => {
+      // 1. Map population data by ID (ISO 3-letter code) and Country Name
+      const popMap = new Map();
+      const countryNames = new Map();
+
+      popData.forEach(d => {
+        const id = d.id.trim();
+        const pop = +d.population_millions;
+        popMap.set(id, pop);
+        countryNames.set(id, d.country.trim());
+      });
+
+      const maxPop = d3.max(popData, d => +d.population_millions) || 1430;
+      const minPop = d3.min(popData, d => +d.population_millions) || 42;
+
+      // Requirement 2: Sequential color scale (square-root scale)
+      // d3.scaleSequentialPow with exponent 0.5 implements a square-root scale
+      const colorScale = d3.scaleSequentialPow(d3.interpolateYlOrRd)
+        .exponent(0.5)
+        .domain([0, maxPop]);
+
+      // Requirement 1: Use a projection and path generator
+      // Equal Earth projection gives an accurate, aesthetically pleasing world view
+      const projection = d3.geoEqualEarth()
+        .fitSize([width, height - 10], geoData);
+
+      const path = d3.geoPath().projection(projection);
+
+      // Draw countries
+      mapGroup.selectAll("path.country")
+        .data(geoData.features)
+        .enter()
+        .append("path")
+        .attr("class", "country")
+        .attr("d", path)
+        .attr("fill", d => {
+          const pop = popMap.get(d.id);
+          // Requirement 3: Countries without data must be light gray
+          return (pop !== undefined && pop !== null) ? colorScale(pop) : "#e2e8f0";
+        })
+        .attr("stroke", d => {
+          const pop = popMap.get(d.id);
+          return (pop !== undefined && pop !== null) ? "#94a3b8" : "#cbd5e1";
+        })
+        // Requirement 4: Hover tooltip with country name & population, and highlight border
+        .on("mouseover", (event, d) => {
+          const id = d.id;
+          const countryName = countryNames.get(id) || d.properties?.name || id;
+          const pop = popMap.get(id);
+
+          let content = `<div class="title">${countryName}</div>`;
+          if (pop !== undefined && pop !== null) {
+            content += `<div class="badge">ISO: ${id}</div>`;
+            content += `<div><strong>Population:</strong> ${pop.toLocaleString()} million</div>`;
+          } else {
+            content += `<div class="badge">ISO: ${id || "N/A"}</div>`;
+            content += `<div style="color: #94a3b8; font-style: italic;">No population data available</div>`;
+          }
+
+          tooltip.style("opacity", 1).html(content);
+        })
+        .on("mousemove", (event) => {
+          const chartRect = document.getElementById("chart").getBoundingClientRect();
+          tooltip
+            .style("left", (event.clientX - chartRect.left + 15) + "px")
+            .style("top", (event.clientY - chartRect.top - 15) + "px");
+        })
+        .on("mouseout", function() {
+          tooltip.style("opacity", 0);
+        });
+
+      // Requirement 5: Color legend with min and max labels
+      renderLegend(colorScale, minPop, maxPop);
+
+    }).catch(error => {
+      console.error("Error loading map or dataset:", error);
+      d3.select("#chart").append("div")
+        .attr("class", "error-msg")
+        .html(`
+          <strong>Error loading data:</strong> Could not load <code>dataset/population.csv</code> or <code>dataset/world.geojson</code>.<br>
+          <em>Note: If viewing directly as a local file, browser security (CORS) blocks file requests. Please run a local server (e.g. VS Code Live Server or <code>python -m http.server</code>).</em>
+        `);
+    });
+
+    // Helper to render gradient color legend with sqrt mapping
+    function renderLegend(colorScale, minPop, maxPop) {
+      const legendSvg = d3.select("#legend-svg");
+      const legendWidth = 300;
+      const legendHeight = 12;
+
+      // Define linear gradient with 10 sample stops mapped through sqrt colorScale
+      const defs = legendSvg.append("defs");
+      const gradient = defs.append("linearGradient")
+        .attr("id", "legend-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "100%")
+        .attr("y2", "0%");
+
+      const numStops = 10;
+      for (let s = 0; s <= numStops; s++) {
+        const pct = s / numStops;
+        // Inverse square root to match visual gradient evenly
+        const val = Math.pow(pct, 2) * maxPop;
+        gradient.append("stop")
+          .attr("offset", `${pct * 100}%`)
+          .attr("stop-color", colorScale(val));
+      }
+
+      legendSvg.append("rect")
+        .attr("x", 10)
+        .attr("y", 2)
+        .attr("width", legendWidth)
+        .attr("height", legendHeight)
+        .attr("rx", 3)
+        .style("fill", "url(#legend-gradient)")
+        .style("stroke", "#cbd5e1");
+
+      // Min and Max text labels
+      legendSvg.append("text")
+        .attr("x", 10)
+        .attr("y", 28)
+        .attr("font-size", "11px")
+        .attr("fill", "#475569")
+        .attr("font-weight", "600")
+        .text(`0 M`);
+
+      legendSvg.append("text")
+        .attr("x", 10 + legendWidth / 2)
+        .attr("y", 28)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "11px")
+        .attr("fill", "#64748b")
+        .text(`~350 M`);
+
+      legendSvg.append("text")
+        .attr("x", 10 + legendWidth)
+        .attr("y", 28)
+        .attr("text-anchor", "end")
+        .attr("font-size", "11px")
+        .attr("fill", "#475569")
+        .attr("font-weight", "600")
+        .text(`${maxPop.toLocaleString()} M (Max)`);
+    }
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 5: Pakistan Cities Point Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Navigation header between tasks */
+    .nav-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+
+    .nav-link {
+      padding: 8px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      max-width: 1000px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Legend bar */
+    .legends-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 12px 18px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .legend-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .legend-title {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+    }
+
+    .circle-sample {
+      border-radius: 50%;
+      background: rgba(225, 29, 72, 0.55);
+      border: 1.5px solid #be123c;
+      display: inline-block;
+    }
+
+    /* Map Canvas */
+    #chart {
+      width: 100%;
+      position: relative;
+    }
+
+    svg.map-svg {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      background-color: #f0fdf4; /* subtle ocean / map background */
+      border: 1px solid var(--border);
+    }
+
+    /* Geographic boundaries */
+    .country-bg {
+      fill: #f8fafc;
+      stroke: #cbd5e1;
+      stroke-width: 0.8px;
+    }
+
+    .pakistan-boundary {
+      fill: #e2e8f0;
+      stroke: #64748b;
+      stroke-width: 1.2px;
+    }
+
+    /* City circles */
+    .city-circle {
+      fill: rgba(225, 29, 72, 0.55);
+      stroke: #be123c;
+      stroke-width: 1.5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .city-circle:hover {
+      fill: rgba(225, 29, 72, 0.85);
+      stroke: #0f172a;
+      stroke-width: 2.5px;
+      transform: scale(1.08);
+    }
+
+    .city-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      fill: #0f172a;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(255,255,255,0.95), 0 -1px 3px rgba(255,255,255,0.95), 1px 0 3px rgba(255,255,255,0.95), -1px 0 3px rgba(255,255,255,0.95);
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: opacity 0.15s ease;
+      line-height: 1.5;
+      z-index: 100;
+    }
+
+    .tooltip .title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      color: #991b1b;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar for all 6 tasks -->
+  <nav class="nav-bar">
+    <a href="task1.html" class="nav-link">Task 1: Treemap</a>
+    <a href="task2.html" class="nav-link">Task 2: Dendrogram</a>
+    <a href="task3.html" class="nav-link">Task 3: Flight Network</a>
+    <a href="task4.html" class="nav-link">Task 4: World Choropleth</a>
+    <a href="task5.html" class="nav-link active">Task 5: Point Map</a>
+    <a href="task6.html" class="nav-link">Task 6: Spatial Combined</a>
+  </nav>
+
+  <div class="container">
+    <header>
+      <h1>Task 5: Pakistan Cities Point Map</h1>
+      <p class="subtitle">
+        Mercator projection focused on Pakistan with semi-transparent circles whose areas represent urban population.
+      </p>
+    </header>
+
+    <!-- Legend bar -->
+    <div class="legends-bar">
+      <div class="legend-group">
+        <span class="legend-title">Population Circle Area (Square Root Scale):</span>
+        <div class="legend-item">
+          <span class="circle-sample" style="width: 10px; height: 10px;"></span>
+          <span>&lt; 1 Million</span>
+        </div>
+        <div class="legend-item">
+          <span class="circle-sample" style="width: 18px; height: 18px;"></span>
+          <span>~2-4 Million</span>
+        </div>
+        <div class="legend-item">
+          <span class="circle-sample" style="width: 32px; height: 32px;"></span>
+          <span>13-16 Million (Karachi, Lahore)</span>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: #64748b; font-style: italic;">
+        Only cities with population &gt; 1M are labeled on map
+      </div>
+    </div>
+
+    <!-- Chart container -->
+    <div id="chart">
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </div>
+
+  <script>
+    const width = 940;
+    const height = 620;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("class", "map-svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    const mapLayer = svg.append("g").attr("class", "map-layer");
+    const citiesLayer = svg.append("g").attr("class", "cities-layer");
+    const tooltip = d3.select("#tooltip");
+
+    // Load both datasets
+    Promise.all([
+      d3.csv("dataset/pakistan_cities.csv"),
+      d3.json("dataset/world.geojson")
+    ]).then(([cities, geoData]) => {
+      // Parse numeric columns
+      cities.forEach(d => {
+        d.lat = +d.lat;
+        d.lon = +d.lon;
+        d.pop = +d.pop;
+      });
+
+      // Requirement 1: Mercator projection centered on Pakistan
+      const projection = d3.geoMercator()
+        .center([69.5, 30.2])
+        .scale(2100)
+        .translate([width / 2, height / 2]);
+
+      const path = d3.geoPath().projection(projection);
+
+      // Draw geographic background
+      // Render neighboring features
+      mapLayer.selectAll("path.country-bg")
+        .data(geoData.features)
+        .enter()
+        .append("path")
+        .attr("class", d => (d.id === "PAK" || d.properties?.name === "Pakistan") ? "pakistan-boundary" : "country-bg")
+        .attr("d", path);
+
+      // Requirement 3: Use a square-root radius scale (circle area proportional to population)
+      const maxPop = d3.max(cities, d => d.pop) || 16.0;
+      const radiusScale = d3.scaleSqrt()
+        .domain([0, maxPop])
+        .range([5, 34]);
+
+      // Draw cities
+      const cityGroups = citiesLayer.selectAll("g.city")
+        .data(cities)
+        .enter()
+        .append("g")
+        .attr("class", "city")
+        // Requirement 2: Convert coordinates with projection([lon, lat]) (longitude first)
+        .attr("transform", d => {
+          const coords = projection([d.lon, d.lat]);
+          return coords ? `translate(${coords[0]},${coords[1]})` : null;
+        });
+
+      // Requirement 4: Semi-transparent circles so overlapping cities remain visible
+      cityGroups.append("circle")
+        .attr("class", "city-circle")
+        .attr("r", d => radiusScale(d.pop))
+        // Requirement 5: Show all cities in the tooltip
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1).html(`
+            <div class="title">${d.name}</div>
+            <div><strong>Population:</strong> ${d.pop} million</div>
+            <div><strong>Coordinates:</strong> ${d.lat.toFixed(2)}° N, ${d.lon.toFixed(2)}° E</div>
+          `);
+        })
+        .on("mousemove", (event) => {
+          const chartRect = document.getElementById("chart").getBoundingClientRect();
+          tooltip
+            .style("left", (event.clientX - chartRect.left + 15) + "px")
+            .style("top", (event.clientY - chartRect.top - 15) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      // Requirement 5: Label only cities with a population above 1 million
+      cityGroups.filter(d => d.pop > 1.0)
+        .append("text")
+        .attr("class", "city-label")
+        .attr("dx", d => radiusScale(d.pop) + 5)
+        .attr("dy", "0.35em")
+        .text(d => `${d.name} (${d.pop}M)`);
+
+    }).catch(error => {
+      console.error("Error loading map or cities:", error);
+      d3.select("#chart").append("div")
+        .attr("class", "error-msg")
+        .html(`
+          <strong>Error loading data:</strong> Could not load <code>dataset/pakistan_cities.csv</code> or <code>dataset/world.geojson</code>.<br>
+          <em>Note: If viewing directly as a local file, browser security (CORS) blocks file requests. Please run a local server (e.g. VS Code Live Server or <code>python -m http.server</code>).</em>
+        `);
+    });
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Two charts: Lab Task 2</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .value { font-size: 12px; text-anchor: middle; }
+  </style>
+</head>
+<body>
+  <h1>Body mass by species</h1>
+  <svg id="chart1" width="600" height="400"></svg>
+
+  <h1>Number of penguins per island</h1>
+  <svg id="chart2" width="600" height="400"></svg>   <!-- FIX 2: unique id -->
+
+  <script>
+    // FIX 1: no top-level const names repeated. Everything lives inside one function.
+    function drawBar(svgId, map, color) {
+      const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+      const innerWidth = 600 - margin.left - margin.right;
+      const innerHeight = 400 - margin.top - margin.bottom;
+      const rows = Array.from(map, ([name, val]) => ({ name, val }));
+
+      const g = d3.select("#" + svgId).append("g")      // FIX 2: select the right svg
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const x = d3.scaleBand().domain(rows.map(d => d.name)).range([0, innerWidth]).padding(0.3);
+      const y = d3.scaleLinear().domain([0, d3.max(rows, d => d.val)]).nice().range([innerHeight, 0]);
+
+      g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x));
+      g.append("g").call(d3.axisLeft(y));
+
+      g.selectAll("rect").data(rows).join("rect")
+        .attr("x", d => x(d.name)).attr("y", d => y(d.val))
+        .attr("width", x.bandwidth()).attr("height", d => innerHeight - y(d.val))
+        .attr("fill", color);
+
+      g.selectAll(".value").data(rows).join("text").attr("class", "value")
+        .attr("x", d => x(d.name) + x.bandwidth() / 2).attr("y", d => y(d.val) - 5)
+        .text(d => Math.round(d.val));
+    }
+
+    d3.csv("dataset/penguins.csv", d3.autoType).then(data => {
+      drawBar("chart1", d3.rollup(data, v => d3.mean(v, d => d.body_mass_g), d => d.species), "steelblue");
+      drawBar("chart2", d3.rollup(data, v => v.length, d => d.island), "seagreen");
+    });
+  </script>
+</body>
+</html>
