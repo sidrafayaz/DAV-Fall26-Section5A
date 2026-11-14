@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 10 – Air Quality 2025: Time Series in D3</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<style>
+  :root{--ink:#1b2430;--muted:#5b6675;--line:#d9dee5;--bg:#f6f4ef;--card:#fff;--city:#1f4e79;--sub:#e07a1f;--bad:#b42318}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+  header{padding:28px 24px 8px;max-width:1040px;margin:auto}
+  h1{font-size:26px;margin:0 0 4px}
+  header p{margin:0;color:var(--muted)}
+  main{max-width:1040px;margin:auto;padding:8px 24px 60px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}
+  h2{font-size:17px;margin:0}
+  .q{color:var(--muted);margin:2px 0 6px}
+  .sub{font-size:14px;margin:2px 0 8px}
+  .sub b{color:var(--bad)}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .axis text{fill:var(--muted);font-size:12px}
+  .axis path,.axis line{stroke:#aab2bd}
+  .grid line{stroke:#e6e9ee}.grid path{display:none}
+  .lbl{font-size:12px;fill:var(--ink)}
+  .ref{stroke-dasharray:5 4;stroke-width:1.4}
+  #tip{position:fixed;pointer-events:none;background:#1b2430;color:#fff;padding:6px 9px;border-radius:6px;font-size:12px;opacity:0;transition:opacity .1s;z-index:9}
+  button{font:inherit;padding:5px 12px;border:1px solid var(--ink);background:#fff;border-radius:6px;cursor:pointer}
+  button:hover{background:var(--ink);color:#fff}
+  .tools{display:flex;gap:12px;align-items:center;margin:4px 0 6px;color:var(--muted)}
+  table{border-collapse:collapse;font-size:14px;margin-top:6px}
+  td,th{border:1px solid var(--line);padding:4px 10px;text-align:left}
+  .ans li{margin:7px 0}
+  .ans b.k{color:var(--city)}
+  code{background:#eef0f3;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Smog in the Capital, 2025</h1>
+  <p>City Environment Office · Lab 10 – Time Series in D3 · PM2.5 in µg/m³ (practice dataset)</p>
+</header>
+<main id="main"></main>
+<div id="tip"></div>
+
+<script>
+const W = 960, tip = d3.select("#tip");
+const C = {city:"#1f4e79", sub:"#e07a1f", bad:"#b42318", faint:"#9db8d4"};
+const LEVELS = [
+  {name:"Low", test:v=>v<=35, color:"#ffe9a8"},
+  {name:"Moderate", test:v=>v>35&&v<=75, color:"#fdae61"},
+  {name:"High", test:v=>v>75&&v<=150, color:"#d7301f"},
+  {name:"Severe", test:v=>v>150, color:"#5a0f1c"}
+];
+const levelOf = v => LEVELS.find(l=>l.test(v)).name;
+const fmtDate = d3.timeFormat("%d %b %Y"), fmtShort = d3.timeFormat("%d %b"), mon = d3.timeFormat("%b");
+
+function card(id, title, question){
+  const s = d3.select("#main").append("section").attr("id",id);
+  s.append("h2").text(title);
+  s.append("div").attr("class","q").text(question);
+  return s;
+}
+function showTip(ev, html){
+  tip.html(html).style("opacity",1).style("left",(ev.clientX+14)+"px").style("top",(ev.clientY+14)+"px");
+}
+const hideTip = () => tip.style("opacity",0);
+function mkSvg(sel, h){
+  return sel.append("svg").attr("viewBox",`0 0 ${W} ${h}`);
+}
+function yGrid(g, y, w){
+  g.append("g").attr("class","grid").call(d3.axisLeft(y).ticks(6).tickSize(-w).tickFormat(""));
+}
+
+d3.csv("dataset/air_quality_2025.csv", d => ({
+  date: d3.timeParse("%Y-%m-%d")(d.date),
+  city: +d.pm25_city, sub: +d.pm25_suburb, temp: +d.temp_c
+})).then(data => {
+  data.sort((a,b)=>a.date-b.date);
+  const [d0, d1] = d3.extent(data, d=>d.date);
+  const gaps = [];  // [lastBefore, firstAfter]
+  for (let i=1;i<data.length;i++){
+    const n = d3.timeDay.count(data[i-1].date, data[i].date);
+    if (n>1) gaps.push({from:data[i-1].date, to:data[i].date, missing:n-1});
+  }
+  const missingDays = d3.sum(gaps, g=>g.missing);
+  const above15 = data.filter(d=>d.city>15).length, above75 = data.filter(d=>d.city>75).length;
+  const m = {l:52,r:24,t:16,b:34};
+  const iw = W-m.l-m.r;
+  const xFull = d3.scaleTime().domain([d0,d1]).range([0,iw]);
+
+  /* ---------------- Task 1 ---------------- */
+  {
+    const s = card("t1","Task 1 · Data check","Is the file complete?");
+    const days2025 = d3.timeDay.count(new Date(2025,0,1), new Date(2026,0,1));
+    s.append("table").html(`
+      <tr><th>Rows</th><td>${data.length}</td></tr>
+      <tr><th>First date</th><td>${fmtDate(d0)}</td></tr>
+      <tr><th>Last date</th><td>${fmtDate(d1)}</td></tr>
+      <tr><th>Days in 2025</th><td>${days2025}</td></tr>
+      <tr><th>Missing days</th><td>${days2025-data.length}${gaps.map(g=>` (${fmtShort(d3.timeDay.offset(g.from,1))} – ${fmtShort(d3.timeDay.offset(g.to,-1))})`).join("")}</td></tr>`);
+    s.append("p").attr("class","sub").html(`The file has <b>${data.length}</b> rows but 2025 has <b>${days2025}</b> days. <b>${missingDays}</b> days are missing, all in one block, so the sensor was offline rather than the data being sampled irregularly.`);
+  }
+
+  /* ---------------- Task 2 ---------------- */
+  {
+    const s = card("t2","Task 2 · City-centre PM2.5 through 2025","How did PM2.5 in the city centre change through the year?");
+    s.append("div").attr("class","sub").html(`Days above 15 µg/m³: <b>${above15}</b> &nbsp;|&nbsp; Days above 75 µg/m³: <b>${above75}</b>`);
+    const h = 380, ih = h-m.t-m.b;
+    const svg = mkSvg(s,h), g = svg.append("g").attr("transform",`translate(${m.l},${m.t})`);
+    const y = d3.scaleLinear().domain([0, d3.max(data,d=>d.city)*1.08]).range([ih,0]);
+    yGrid(g,y,iw);
+    g.append("g").attr("class","axis").attr("transform",`translate(0,${ih})`).call(d3.axisBottom(xFull).ticks(d3.timeMonth).tickFormat(d3.timeFormat("%b")));
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(6));
+    g.append("text").attr("class","lbl").attr("transform","rotate(-90)").attr("x",-ih/2).attr("y",-40).attr("text-anchor","middle").text("PM2.5 (µg/m³)");
+    const line = d3.line().defined(d=>true).x(d=>xFull(d.date)).y(d=>y(d.city));
+    // break line at gaps
+    const segs = splitSegments(data);
+    segs.forEach(seg=>g.append("path").datum(seg).attr("fill","none").attr("stroke",C.city).attr("stroke-width",1.4).attr("d",line));
+    [[15,"WHO guideline 15 µg/m³","#2e7d32"],[75,"WHO interim target 1 – 75 µg/m³","#b42318"]].forEach(([v,t,c])=>{
+      g.append("line").attr("class","ref").attr("x1",0).attr("x2",iw).attr("y1",y(v)).attr("y2",y(v)).attr("stroke",c);
+      g.append("text").attr("class","lbl").attr("x",iw).attr("y",y(v)-5).attr("text-anchor","end").attr("fill",c).style("fill",c).text(t);
+    });
+    const top2 = d3.sort(data,(a,b)=>d3.descending(a.city,b.city)).slice(0,2);
+    top2.forEach(d=>{
+      g.append("circle").attr("cx",xFull(d.date)).attr("cy",y(d.city)).attr("r",5).attr("fill",C.bad).attr("stroke","#fff");
+      const left = xFull(d.date)>iw-160;
+      g.append("text").attr("class","lbl").attr("x",xFull(d.date)+(left?-9:9)).attr("y",y(d.city)+4).attr("text-anchor",left?"end":"start")
+        .text(`${fmtShort(d.date)}: ${d.city} µg/m³`);
+    });
+    hoverLine(g, data, xFull, y, d=>d.city, iw, ih, "PM2.5 (city)");
+  }
+
+  /* ---------------- Task 3 ---------------- */
+  {
+    const s = card("t3","Task 3 · Build-up of unhealthy days","How quickly did unhealthy days (above 75 µg/m³) build up?");
+    const cum = d3.cumsum(data, d=>d.city>75?1:0);
+    const series = data.map((d,i)=>({date:d.date, v:cum[i]}));
+    s.append("div").attr("class","sub").html(`Final running total: <b>${cum[cum.length-1]}</b> days (matches Task 2: ${above75}).`);
+    const h = 340, ih = h-m.t-m.b;
+    const svg = mkSvg(s,h), g = svg.append("g").attr("transform",`translate(${m.l},${m.t})`);
+    const y = d3.scaleLinear().domain([0,d3.max(cum)*1.1]).range([ih,0]);
+    yGrid(g,y,iw);
+    g.append("g").attr("class","axis").attr("transform",`translate(0,${ih})`).call(d3.axisBottom(xFull).ticks(d3.timeMonth).tickFormat(d3.timeFormat("%b")));
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(6));
+    g.append("text").attr("class","lbl").attr("transform","rotate(-90)").attr("x",-ih/2).attr("y",-40).attr("text-anchor","middle").text("Days above 75 so far");
+    g.append("path").datum(series).attr("fill","#d7301f").attr("fill-opacity",.25).attr("d",d3.area().x(d=>xFull(d.date)).y0(ih).y1(d=>y(d.v)));
+    g.append("path").datum(series).attr("fill","none").attr("stroke","#d7301f").attr("stroke-width",2).attr("d",d3.line().x(d=>xFull(d.date)).y(d=>y(d.v)));
+    const last = series[series.length-1];
+    g.append("circle").attr("cx",xFull(last.date)).attr("cy",y(last.v)).attr("r",4).attr("fill","#d7301f");
+    g.append("text").attr("class","lbl").attr("x",xFull(last.date)-8).attr("y",y(last.v)-8).attr("text-anchor","end").text(`${last.v} days in total`);
+    hoverLine(g, series, xFull, y, d=>d.v, iw, ih, "Running total");
+  }
+
+  /* ---------------- Task 4 ---------------- */
+  {
+    const s = card("t4","Task 4 · City vs suburb","Does the suburb behave like the city centre?");
+    const h = 380, ih = h-m.t-m.b;
+    const svg = mkSvg(s,h), g = svg.append("g").attr("transform",`translate(${m.l},${m.t})`);
+    const y = d3.scaleLinear().domain([0,d3.max(data,d=>Math.max(d.city,d.sub))*1.08]).range([ih,0]);
+    yGrid(g,y,iw);
+    g.append("g").attr("class","axis").attr("transform",`translate(0,${ih})`).call(d3.axisBottom(xFull).ticks(d3.timeMonth).tickFormat(d3.timeFormat("%b")));
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(6));
+    g.append("text").attr("class","lbl").attr("transform","rotate(-90)").attr("x",-ih/2).attr("y",-40).attr("text-anchor","middle").text("PM2.5 (µg/m³)");
+    [["city",C.city,"City centre"],["sub",C.sub,"Suburb"]].forEach(([k,c])=>{
+      splitSegments(data).forEach(seg=>g.append("path").datum(seg).attr("fill","none").attr("stroke",c).attr("stroke-width",1.4)
+        .attr("d",d3.line().x(d=>xFull(d.date)).y(d=>y(d[k]))));
+    });
+    legend(g, [["City centre",C.city],["Suburb",C.sub]], 12, 0);
+    hoverLine(g, data, xFull, y, d=>d.city, iw, ih, null, d=>`City: <b>${d.city}</b><br>Suburb: <b>${d.sub}</b><br>Gap: ${(d.city-d.sub).toFixed(1)}`);
+  }
+
+  /* ---------------- Task 5 ---------------- */
+  {
+    const s = card("t5","Task 5 · Monthly composition","In each month, how are the days split between pollution levels?");
+    const rows = d3.range(12).map(mi=>{
+      const md = data.filter(d=>d.date.getMonth()===mi);
+      const o = {month:mi, total:md.length, cal:new Date(2025,mi+1,0).getDate()};
+      LEVELS.forEach(l=>o[l.name]=md.filter(d=>levelOf(d.city)===l.name).length);
+      return o;
+    });
+    const keys = LEVELS.map(l=>l.name);
+    const stack = d3.stack().keys(keys)(rows);
+    const h = 400, ih = h-m.t-m.b-14;
+    const svg = mkSvg(s,h), g = svg.append("g").attr("transform",`translate(${m.l},${m.t+14})`);
+    const x = d3.scaleBand().domain(d3.range(12)).range([0,iw]).padding(.2);
+    const y = d3.scaleLinear().domain([0,31]).range([ih,0]);
+    yGrid(g,y,iw);
+    g.append("g").attr("class","axis").attr("transform",`translate(0,${ih})`).call(d3.axisBottom(x).tickFormat(i=>mon(new Date(2025,i,1))));
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(8));
+    g.append("text").attr("class","lbl").attr("transform","rotate(-90)").attr("x",-ih/2).attr("y",-40).attr("text-anchor","middle").text("Days");
+    const color = d3.scaleOrdinal(keys, LEVELS.map(l=>l.color));
+    g.selectAll("g.layer").data(stack).join("g").attr("class","layer").attr("fill",d=>color(d.key))
+      .selectAll("rect").data(d=>d.map(v=>({...v,key:d.key}))).join("rect")
+      .attr("x",d=>x(d.data.month)).attr("width",x.bandwidth()).attr("y",d=>y(d[1])).attr("height",d=>y(d[0])-y(d[1]))
+      .attr("stroke","#fff").attr("stroke-width",.6)
+      .on("mousemove",(ev,d)=>showTip(ev,`${mon(new Date(2025,d.data.month,1))} · ${d.key}: <b>${d.data[d.key]}</b> days`)).on("mouseleave",hideTip);
+    g.selectAll("text.tot").data(rows).join("text").attr("class","lbl").attr("x",d=>x(d.month)+x.bandwidth()/2).attr("y",d=>y(d.total)-4).attr("text-anchor","middle")
+      .text(d=>d.total);
+    // mark the month with missing days
+    rows.filter(r=>r.total<r.cal).forEach(r=>{
+      g.append("text").attr("class","lbl").attr("x",x(r.month)+x.bandwidth()/2).attr("y",y(r.total)-18).attr("text-anchor","middle").style("fill",C.bad).text(`${r.cal-r.total} missing`);
+    });
+    legend(g, LEVELS.map(l=>[l.name,l.color]), iw-330, -12, true);
+    s.append("p").attr("class","sub").html(`Bar height = days recorded. <b>Feb</b> is short because it has 28 calendar days; <b>Mar</b> is short because ${missingDays} days are missing (sensor offline). 30-day months are Apr, Jun, Sep, Nov.`);
+  }
+
+  /* ---------------- Task 6 ---------------- */
+  {
+    const s = card("t6","Task 6 · Month × weekday heatmap","Is pollution tied to the day of the week, the month, or both?");
+    const dow = d => (d.getDay()+6)%7;   // Mon = 0
+    const roll = d3.rollup(data, v=>d3.mean(v,d=>d.city), d=>d.date.getMonth(), d=>dow(d.date));
+    const cells = [];
+    for (let mi=0; mi<12; mi++) for (let di=0; di<7; di++) cells.push({mi,di,v:roll.get(mi)?.get(di)});
+    const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    const h = 470, ml = 56, mt = 30;
+    const svg = mkSvg(s,h), g = svg.append("g").attr("transform",`translate(${ml},${mt})`);
+    const gw = 600, gh = 400;
+    const x = d3.scaleBand().domain(d3.range(7)).range([0,gw]).padding(.05);
+    const y = d3.scaleBand().domain(d3.range(12)).range([0,gh]).padding(.05);
+    const color = d3.scaleSequential(d3.interpolateYlOrRd).domain(d3.extent(cells,d=>d.v));
+    g.selectAll("rect").data(cells).join("rect").attr("x",d=>x(d.di)).attr("y",d=>y(d.mi)).attr("width",x.bandwidth()).attr("height",y.bandwidth()).attr("rx",3)
+      .attr("fill",d=>d.v==null?"#eee":color(d.v))
+      .on("mousemove",(ev,d)=>showTip(ev,`${mon(new Date(2025,d.mi,1))} · ${days[d.di]}: <b>${d.v?.toFixed(1)}</b> µg/m³`)).on("mouseleave",hideTip);
+    g.selectAll("text.c").data(cells).join("text").attr("x",d=>x(d.di)+x.bandwidth()/2).attr("y",d=>y(d.mi)+y.bandwidth()/2+4).attr("text-anchor","middle")
+      .attr("font-size",11).attr("fill",d=>d.v>(color.domain()[1]*.62)?"#fff":"#222").text(d=>d.v==null?"":Math.round(d.v));
+    g.append("g").attr("class","axis").call(d3.axisTop(x).tickFormat(i=>days[i]).tickSize(0)).select(".domain").remove();
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).tickFormat(i=>mon(new Date(2025,i,1))).tickSize(0)).select(".domain").remove();
+    // colour legend
+    const lg = svg.append("g").attr("transform",`translate(${ml+gw+70},${mt})`);
+    const id = "grad6";
+    const defs = svg.append("defs").append("linearGradient").attr("id",id).attr("x1",0).attr("x2",0).attr("y1",1).attr("y2",0);
+    d3.range(0,1.01,.1).forEach(t=>defs.append("stop").attr("offset",t).attr("stop-color",d3.interpolateYlOrRd(t)));
+    lg.append("rect").attr("width",18).attr("height",260).attr("fill",`url(#${id})`);
+    const ly = d3.scaleLinear().domain(color.domain()).range([260,0]);
+    lg.append("g").attr("class","axis").attr("transform","translate(18,0)").call(d3.axisRight(ly).ticks(6));
+    lg.append("text").attr("class","lbl").attr("y",-10).text("Mean city PM2.5 (µg/m³)");
+    svg.append("g").attr("transform",`translate(${ml+gw+70},${mt+290})`).append("text").attr("class","lbl").attr("font-size",12).style("fill","#5b6675").selectAll("tspan").data(["Rows differ a lot (month).","Columns barely differ (weekday).","Bright May-Sun cell = 18 May spike."]).join("tspan").attr("x",0).attr("dy","1.4em").text(d=>d);
+  }
+
+  /* ---------------- Task 7 ---------------- */
+  {
+    const s = card("t7","Task 7 · Monthly spread (min – max band)","How wide is the gap between the best and worst day in each month?");
+    const stats = d3.range(12).map(mi=>{
+      const v = data.filter(d=>d.date.getMonth()===mi).map(d=>d.city);
+      return {mi, date:new Date(2025,mi,15), min:d3.min(v), max:d3.max(v), mean:d3.mean(v)};
+    });
+    const widest = d3.greatest(stats,d=>d.max-d.min);
+    s.append("div").attr("class","sub").html(`Widest spread: <b>${mon(new Date(2025,widest.mi,1))}</b> (${widest.min} to ${widest.max} = ${(widest.max-widest.min).toFixed(1)} µg/m³).`);
+    const h = 380, ih = h-m.t-m.b;
+    const svg = mkSvg(s,h), g = svg.append("g").attr("transform",`translate(${m.l},${m.t})`);
+    const x = d3.scaleTime().domain([new Date(2025,0,15),new Date(2025,11,15)]).range([0,iw]);
+    const y = d3.scaleLinear().domain([0,d3.max(stats,d=>d.max)*1.08]).range([ih,0]);
+    yGrid(g,y,iw);
+    g.append("g").attr("class","axis").attr("transform",`translate(0,${ih})`).call(d3.axisBottom(x).ticks(d3.timeMonth).tickFormat(d3.timeFormat("%b")));
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(6));
+    g.append("text").attr("class","lbl").attr("transform","rotate(-90)").attr("x",-ih/2).attr("y",-40).attr("text-anchor","middle").text("PM2.5 (µg/m³)");
+    g.append("path").datum(stats).attr("fill","#f4a582").attr("fill-opacity",.45).attr("d",d3.area().curve(d3.curveMonotoneX).x(d=>x(d.date)).y0(d=>y(d.min)).y1(d=>y(d.max)));
+    g.append("path").datum(stats).attr("fill","none").attr("stroke","#b2400f").attr("stroke-width",2.6).attr("d",d3.line().curve(d3.curveMonotoneX).x(d=>x(d.date)).y(d=>y(d.mean)));
+    g.selectAll("circle").data(stats).join("circle").attr("cx",d=>x(d.date)).attr("cy",d=>y(d.mean)).attr("r",4).attr("fill","#b2400f")
+      .on("mousemove",(ev,d)=>showTip(ev,`${mon(d.date)}<br>max <b>${d.max}</b><br>mean <b>${d.mean.toFixed(1)}</b><br>min <b>${d.min}</b>`)).on("mouseleave",hideTip);
+    legend(g, [["Min to max range","#f4a582"],["Monthly mean","#b2400f"]], 12, 0);
+  }
+
+  /* ---------------- Tasks 8 & 9 ---------------- */
+  {
+    const ma = movingAverage(data, 7);
+    const s8 = card("t8","Task 8 · Trend and data quality","What is the trend once daily noise is removed, and was the sensor working all year?");
+    s8.append("div").attr("class","sub").html(`Missing: <b>${missingDays} days</b> (${gaps.map(g=>fmtShort(d3.timeDay.offset(g.from,1))+" – "+fmtShort(d3.timeDay.offset(g.to,-1))).join(", ")}). The 7-day average starts again 7 days after the gap and never mixes days from both sides.`);
+    drawMain(s8, {data, ma, gaps, x:xFull, interactive:false});
+
+    const s9 = card("t9","Task 9 · Zoom and explore","Can the Director pick any period and look at it closely?");
+    const bar = s9.append("div").attr("class","tools");
+    bar.append("button").attr("id","reset").text("Reset to full year");
+    const rangeTxt = bar.append("span").attr("id","range").text("Showing: full year  ·  drag on the small chart below to zoom");
+    drawMain(s9, {data, ma, gaps, x:xFull, interactive:true, rangeTxt});
+  }
+
+  /* ---------------- Answers ---------------- */
+  {
+    const s = card("ans","Answers for the Director","Each answer points to a chart and gives a number, month or date.");
+    s.append("ol").attr("class","ans").html(`
+    <li><b class="k">Seasonality (Tasks 2, 6, 7).</b> Worst month: <b>February</b>, mean 141.9 µg/m³ (Dec 138.8 and Jan 137.6 are almost the same). Best: <b>July</b>, 27.1. Worst ÷ best ≈ <b>5.2×</b>.</li>
+    <li><b class="k">Anomalies (Task 2).</b> Highest days: <b>8 Nov, 320.0</b> and <b>18 May, 245.0</b>. Both are isolated spikes: 18 May is about 4× May’s mean (59.9), 8 Nov about 2.5× November’s (129.0). The suburb spiked too (290 and 210), so the cause is regional, not one street. Possible causes: crop-residue or forest fires, a dust storm, a temperature inversion trapping smoke, or a large industrial release.</li>
+    <li><b class="k">Guideline (Task 2).</b> Above 15: <b>${above15} days</b> = ${(100*above15/data.length).toFixed(1)}% of ${data.length} recorded days. Above 75: <b>${above75} days</b> = ${(100*above75/data.length).toFixed(1)}%.</li>
+    <li><b class="k">Build-up (Task 3).</b> Fastest in <b>Jan–Feb</b> and <b>Nov–Dec</b>, where almost every day counts (31/31 in Jan and Dec, 28/28 in Feb, 30/30 in Nov), so the slope is about 1 per day. The curve is <b>flat from mid-May to early September</b>: June, July and August have zero days above 75. The total goes 98 (end Apr) → 100 (end Aug) → 188 (end Dec).</li>
+    <li><b class="k">Comparison (Task 4).</b> Yes, same shape (correlation ≈ 0.98), but the suburb is lower on 98.6% of days. The gap is widest in <b>Feb</b> (about 32.7 µg/m³ on average; 24 Feb: 237.8 vs 157.3, a difference of 80.5) and smallest in <b>Jul</b> (5.2). Suggests extra local sources in the centre during winter.</li>
+    <li><b class="k">Composition (Task 5).</b> Severe days occur in Jan (9), Feb (8), Mar (1), May (1), Oct (2), Nov (5) and Dec (11). Most Low days: <b>July</b> (28). Feb has 28 calendar days, March shows only 22 because 9 days are missing, and 30-day months are slightly shorter than 31-day ones.</li>
+    <li><b class="k">Pattern (Task 6).</b> Mostly by month. Weekday means only range from 80.6 (Sat) to 90.4 (Tue), about 10 µg/m³, against monthly means from 27 to 142. Weekends are a bit lower (traffic and industry matter a little), but the main driver is seasonal: temperature and weather, heating and burning in cold months (daily correlation with temperature ≈ −0.76). The bright May-Sunday cell is just the 18 May spike.</li>
+    <li><b class="k">Spread (Task 7).</b> Widest in <b>November</b>: 80.9 to 320.0 (≈ 239 µg/m³), then May (≈ 214). A monthly mean hides it because one spike barely moves the average, and the mean cannot show the worst day people breathed.</li>
+    <li><b class="k">Trend and data quality (Task 8).</b> Only a seasonal U-shape, no long-term rise or fall that one year can prove (Jan 137.6 vs Dec 138.8). <b>${missingDays} days</b> are missing (12–20 Mar, ${(100*missingDays/365).toFixed(1)}% of the year). An unbroken line would draw invented values across the gap (162.9 on 11 Mar to 144.0 on 21 Mar) and hide that the sensor was offline.</li>
+    <li><b class="k">Zoom (Task 9).</b> Select November: you can see that 8 Nov is a one-day peak far above neighbouring days, with every other day still above 75, and the suburb moving with the city. In the full-year chart it looks like a thin spike with no context.</li>
+    <li><b class="k">Chart choice.</b> A pie of monthly averages cannot show (1) <i>order and direction</i>: which month comes first, whether it is rising or falling, or that there is a seasonal curve; (2) <i>daily extremes, spread and gaps</i>: 320 on 8 Nov, the 9 missing days, or days above 15 and 75. Averages also are not parts of a whole, so a pie is the wrong shape.</li>
+    <li><b class="k">Recommendation.</b> Restrict outdoor school activity in <b>February</b> and <b>December</b>. Evidence: Task 7 (Feb highest mean, 141.9; Dec 138.8), Task 5 (Dec has the most Severe days, 11; Feb has 8; both have no Low days), Task 3 (every day in Feb and Dec is above 75, steepest build-up), Task 6 (hottest heatmap rows are Dec–Feb). January is a near tie (31/31 unhealthy, 9 Severe), so if winter break already covers Dec–Jan, swap in January or November.</li>
+    `);
+  }
+
+  /* ================= helpers needing data ================= */
+  function splitSegments(arr){
+    const segs=[]; let cur=[arr[0]];
+    for(let i=1;i<arr.length;i++){
+      if (d3.timeDay.count(arr[i-1].date, arr[i].date)>1){ segs.push(cur); cur=[]; }
+      cur.push(arr[i]);
+    }
+    segs.push(cur); return segs;
+  }
+  function movingAverage(arr, n){
+    // mean of the day and previous n-1 calendar days, never crossing a gap
+    const out=[];
+    splitSegments(arr).forEach((seg,si)=>{
+      seg.forEach((d,i)=>{ if(i>=n-1) out.push({date:d.date, v:d3.mean(seg.slice(i-n+1,i+1),e=>e.city), si}); });
+    });
+    return out;
+  }
+  function legend(g, items, x0, y0, horizontal){
+    const lg = g.append("g").attr("transform",`translate(${x0},${y0})`);
+    items.forEach(([t,c],i)=>{
+      const it = lg.append("g").attr("transform", horizontal?`translate(${i*82},0)`:`translate(0,${i*20})`);
+      it.append("rect").attr("width",14).attr("height",14).attr("rx",3).attr("fill",c).attr("stroke","#999").attr("stroke-width",.4);
+      it.append("text").attr("class","lbl").attr("x",20).attr("y",11).text(t);
+    });
+  }
+  function hoverLine(g, arr, x, y, acc, iw, ih, name, htmlFn){
+    const bis = d3.bisector(d=>d.date).center;
+    const mark = g.append("g").style("display","none");
+    mark.append("line").attr("y1",0).attr("y2",ih).attr("stroke","#888").attr("stroke-dasharray","3 3");
+    const dot = mark.append("circle").attr("r",4).attr("fill","#111");
+    g.append("rect").attr("width",iw).attr("height",ih).attr("fill","none").attr("pointer-events","all")
+      .on("mousemove",ev=>{
+        const [mx] = d3.pointer(ev);
+        const d = arr[bis(arr, x.invert(mx))];
+        mark.style("display",null).attr("transform",`translate(${x(d.date)},0)`);
+        dot.attr("cy",y(acc(d)));
+        showTip(ev, `${fmtDate(d.date)}<br>` + (htmlFn?htmlFn(d):`${name}: <b>${acc(d)}</b>`));
+      }).on("mouseleave",()=>{mark.style("display","none");hideTip();});
+  }
+
+  function drawMain(sel, o){
+    const {data, ma, gaps, interactive} = o;
+    const h1 = 400, ih = h1-m.t-m.b;
+    const svg = mkSvg(sel, interactive ? h1+130 : h1);
+    const clipId = "clip"+(interactive?"9":"8");
+    svg.append("defs").append("clipPath").attr("id",clipId).append("rect").attr("width",iw).attr("height",ih+2).attr("y",-1);
+    const g = svg.append("g").attr("transform",`translate(${m.l},${m.t})`);
+    const x = o.x.copy();
+    const y = d3.scaleLinear().domain([0,d3.max(data,d=>d.city)*1.08]).range([ih,0]);
+    const gx = g.append("g").attr("class","axis").attr("transform",`translate(0,${ih})`);
+    yGrid(g,y,iw);
+    g.append("g").attr("class","axis").call(d3.axisLeft(y).ticks(6));
+    g.append("text").attr("class","lbl").attr("transform","rotate(-90)").attr("x",-ih/2).attr("y",-40).attr("text-anchor","middle").text("PM2.5 city (µg/m³)");
+    const plot = g.append("g").attr("clip-path",`url(#${clipId})`);
+    const gapG = plot.append("g");
+    const dailyG = plot.append("g"), maG = plot.append("g");
+    gaps.forEach(gp=>{
+      gapG.append("rect").attr("class","gap").attr("y",0).attr("height",ih).attr("fill","#bbb").attr("fill-opacity",.35)
+        .datum(gp);
+      gapG.append("text").attr("class","lbl gaplbl").datum(gp).attr("y",16).attr("text-anchor","middle").style("fill","#444");
+      gapG.append("text").attr("class","lbl gapnote").datum(gp).attr("y",32).attr("text-anchor","middle").style("fill","#444");
+    });
+    const segs = splitSegments(data);
+    const maSegs = d3.groups(ma, d=>d.si).map(([,v])=>v);
+    const dline = d3.line().x(d=>x(d.date)).y(d=>y(d.city));
+    const mline = d3.line().x(d=>x(d.date)).y(d=>y(d.v));
+    const dPaths = segs.map(seg=>dailyG.append("path").datum(seg).attr("fill","none").attr("stroke",C.faint).attr("stroke-width",1).attr("opacity",.9));
+    const mPaths = maSegs.map(seg=>maG.append("path").datum(seg).attr("fill","none").attr("stroke","#0b2a4a").attr("stroke-width",3));
+    function redraw(){
+      gx.call(d3.axisBottom(x).ticks(interactive?8:d3.timeMonth).tickFormat(interactive&&(x.domain()[1]-x.domain()[0])<1000*86400*120 ? d3.timeFormat("%d %b") : d3.timeFormat("%b")));
+      dPaths.forEach(p=>p.attr("d",dline));
+      mPaths.forEach(p=>p.attr("d",mline));
+      gapG.selectAll("rect.gap").attr("x",d=>x(d.from)).attr("width",d=>Math.max(0,x(d.to)-x(d.from)));
+      gapG.selectAll("text.gaplbl").attr("x",d=>(x(d.from)+x(d.to))/2).text("No data: sensor offline");
+      gapG.selectAll("text.gapnote").attr("x",d=>(x(d.from)+x(d.to))/2).text(d=>`${d.missing} days missing`);
+    }
+    redraw();
+    legend(g, [["Daily value",C.faint],["7-day average","#0b2a4a"],["Gap (no data)","#c9c9c9"]], iw-400, ih-34, true);
+    // hover (uses current x)
+    const bis = d3.bisector(d=>d.date).center;
+    const mark = g.append("g").style("display","none");
+    mark.append("line").attr("y1",0).attr("y2",ih).attr("stroke","#888").attr("stroke-dasharray","3 3");
+    const dot = mark.append("circle").attr("r",4).attr("fill","#111");
+    g.append("rect").attr("width",iw).attr("height",ih).attr("fill","none").attr("pointer-events","all")
+      .on("mousemove",ev=>{
+        const [mx]=d3.pointer(ev); const t=x.invert(mx);
+        if(t<d0||t>d1) return;
+        const d=data[bis(data,t)];
+        const mv=ma.find(e=>+e.date===+d.date);
+        mark.style("display",null).attr("transform",`translate(${x(d.date)},0)`); dot.attr("cy",y(d.city));
+        showTip(ev,`${fmtDate(d.date)}<br>Daily: <b>${d.city}</b>${mv?`<br>7-day avg: <b>${mv.v.toFixed(1)}</b>`:""}`);
+      }).on("mouseleave",()=>{mark.style("display","none");hideTip();});
+
+    if(!interactive) return;
+    // overview + brush
+    const oy0 = h1+28, oh = 70;
+    const og = svg.append("g").attr("transform",`translate(${m.l},${oy0})`);
+    const oy = d3.scaleLinear().domain(y.domain()).range([oh,0]);
+    og.append("g").attr("class","axis").attr("transform",`translate(0,${oh})`).call(d3.axisBottom(xFull).ticks(d3.timeMonth).tickFormat(d3.timeFormat("%b")));
+    og.append("text").attr("class","lbl").attr("y",-6).style("fill","#5b6675").text("Overview – drag to select a period");
+    segs.forEach(seg=>og.append("path").datum(seg).attr("fill","none").attr("stroke",C.city).attr("stroke-width",1)
+      .attr("d",d3.line().x(d=>xFull(d.date)).y(d=>oy(d.city))));
+    const brush = d3.brushX().extent([[0,0],[iw,oh]]).on("brush end",ev=>{
+      if(!ev.selection){ x.domain(xFull.domain()); o.rangeTxt.text("Showing: full year  ·  drag on the small chart below to zoom"); redraw(); return; }
+      const [a,b]=ev.selection.map(xFull.invert);
+      x.domain([a,b]); redraw();
+      o.rangeTxt.text(`Showing: ${fmtDate(a)} – ${fmtDate(b)} (${d3.timeDay.count(a,b)} days)`);
+    });
+    const gb = og.append("g").call(brush);
+    d3.select("#reset").on("click",()=>{ gb.call(brush.move,null); });
+  }
+}).catch(err=>{
+  d3.select("#main").append("p").style("color","#b42318").text("Could not load dataset/air_quality_2025.csv – open this page through a local server (e.g. VS Code Live Server). "+err);
+});
+</script>
+</body>
+</html>
