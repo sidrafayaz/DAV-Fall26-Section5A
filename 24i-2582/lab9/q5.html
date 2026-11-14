@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script><title>Pakistan Cities Point Map</title><style>body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fa;color:#1f2937}header{padding:16px 24px}h1{margin:0 0 4px;font-size:22px}p.sub{margin:0;font-size:14px;color:#555}svg{display:block;width:100%;max-width:1000px;margin:0 auto;background:#eaf2f8;border:1px solid #dde3ea;border-radius:8px}#tip{position:fixed;pointer-events:none;background:#111827;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;opacity:0}.faded{opacity:.12}.lbl{font-size:12px;font-weight:600;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px}.legtxt{font-size:11px;fill:#333}</style></head><body>
+<header><h1>Pakistan's Largest Cities</h1><p class="sub">Circle area = population (millions). Labels shown for cities above 1 million; hover any city for details.</p></header>
+<svg id="map" viewBox="0 0 800 700"></svg><div id="tip"></div>
+<script>
+const GEO_FILE = "world.geojson";
+const W = 800, H = 700;
+const svg = d3.select("#map"), tip = d3.select("#tip");
+
+Promise.all([d3.json(GEO_FILE), d3.csv("pakistan_cities.csv", d => ({name: d.name.trim(), lat: +d.lat, lon: +d.lon, pop: +d.pop}))])
+.then(([world, cities]) => {
+  // Mercator centered on Pakistan
+  const projection = d3.geoMercator().center([69.5, 30.5]).scale(2700).translate([W / 2, H / 2]);
+  const path = d3.geoPath(projection);
+
+  svg.append("g").selectAll("path").data(world.features).join("path")
+    .attr("d", path).attr("fill", "#f0ece3").attr("stroke", "#999").attr("stroke-width", 0.6);
+
+  const r = d3.scaleSqrt().domain([0, d3.max(cities, d => d.pop)]).range([0, 45]);
+
+  const g = svg.append("g").selectAll("circle").data(cities).join("circle")
+    .attr("cx", d => projection([d.lon, d.lat])[0])   // longitude first
+    .attr("cy", d => projection([d.lon, d.lat])[1])
+    .attr("r", d => r(d.pop))
+    .attr("fill", "#3b82c4").attr("fill-opacity", 0.45)
+    .attr("stroke", "#1e4f8a").attr("stroke-width", 1.2)
+    .on("mouseover", (e, d) => tip.style("opacity", 1).html("<b>" + d.name + "</b><br>" + d.pop + " million"))
+    .on("mousemove", e => tip.style("left", (e.clientX + 14) + "px").style("top", (e.clientY + 14) + "px"))
+    .on("mouseout", () => tip.style("opacity", 0));
+
+  svg.append("g").selectAll("text").data(cities.filter(d => d.pop > 1)).join("text")
+    .attr("class", "lbl")
+    .attr("x", d => projection([d.lon, d.lat])[0])
+    .attr("y", d => projection([d.lon, d.lat])[1] - r(d.pop) - 5)
+    .text(d => d.name);
+
+  // Size legend
+  const lg = svg.append("g").attr("transform", "translate(60,600)");
+  lg.append("text").attr("class", "legtxt").attr("y", -70).text("Population (millions)");
+  [1, 5, 15].forEach((v, i) => {
+    const cx = 25 + i * 90;
+    lg.append("circle").attr("cx", cx).attr("cy", -20).attr("r", r(v)).attr("fill", "#3b82c4").attr("fill-opacity", .45).attr("stroke", "#1e4f8a");
+    lg.append("text").attr("class", "legtxt").attr("x", cx).attr("y", 30).attr("text-anchor", "middle").text(v + "M");
+  });
+}).catch(err => { svg.append("text").attr("x", 20).attr("y", 40).attr("fill", "crimson").text("Load error: check file names and use Live Server."); console.error(err); });
+</script></body></html>

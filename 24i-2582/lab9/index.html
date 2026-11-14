@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Course Enrollment Treemap</title>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #chart {
+            max-width: 1000px;
+            margin: auto;
+        }
+
+        svg {
+            width: 100%;
+            height: auto;
+        }
+
+        .label {
+            fill: white;
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        #tooltip {
+            position: absolute;
+            display: none;
+            background: white;
+            border: 1px solid black;
+            padding: 8px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+
+        #legend {
+            text-align: center;
+            margin: 15px;
+        }
+
+        .legend-item {
+            display: inline-block;
+            margin: 5px 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Course Enrollment Treemap</h1>
+
+    <div id="legend"></div>
+    <div id="chart"></div>
+    <div id="tooltip"></div>
+
+    <script>
+        const width = 1000;
+        const height = 550;
+
+        const colors = d3.scaleOrdinal()
+            .domain([
+                "Computer Science",
+                "Engineering",
+                "Business",
+                "Sciences"
+            ])
+            .range([
+                "#2563eb",
+                "#16a34a",
+                "#f97316",
+                "#9333ea"
+            ]);
+
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("viewBox", `0 0 ${width} ${height}`);
+
+        const tooltip = d3.select("#tooltip");
+
+        d3.csv("university.csv", d3.autoType).then(data => {
+
+            // Convert CSV rows into a hierarchy
+            const groupedData = d3.group(
+                data,
+                d => d.department
+            );
+
+            const hierarchyData = {
+                name: "University",
+                children: Array.from(
+                    groupedData,
+                    ([department, courses]) => ({
+                        name: department,
+                        children: courses.map(d => ({
+                            name: d.course,
+                            students: d.students,
+                            department: department
+                        }))
+                    })
+                )
+            };
+
+            // Create the hierarchy and calculate student totals
+            const root = d3.hierarchy(hierarchyData)
+                .sum(d => d.students || 0)
+                .sort((a, b) => b.value - a.value);
+
+            // Calculate rectangle positions and sizes
+            d3.treemap()
+                .size([width, height])
+                .paddingOuter(5)
+                .paddingInner(3)
+                .paddingTop(22)(root);
+
+            // Draw one group for every course
+            const cells = svg.selectAll("g")
+                .data(root.leaves())
+                .join("g")
+                .attr(
+                    "transform",
+                    d => `translate(${d.x0},${d.y0})`
+                );
+
+            // Draw the rectangles
+            cells.append("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", d => d.y1 - d.y0)
+                .attr("fill", d => colors(d.data.department))
+                .attr("stroke", "white")
+                .attr("stroke-width", 2)
+                .on("mouseover", function(event, d) {
+                    tooltip.style("display", "block")
+                        .html(
+                            "<b>Course:</b> " + d.data.name +
+                            "<br><b>Department:</b> " +
+                            d.data.department +
+                            "<br><b>Students:</b> " +
+                            d.data.students
+                        );
+                })
+                .on("mousemove", function(event) {
+                    tooltip
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("display", "none");
+                });
+
+            // Add course labels
+            cells.append("text")
+                .attr("class", "label")
+                .attr("x", 6)
+                .attr("y", 18)
+                .text(d => d.data.name)
+                .each(function(d) {
+                    if (d.x1 - d.x0 < 65) {
+                        d3.select(this).remove();
+                    }
+                });
+
+            // Create the department legend
+            const departments = colors.domain();
+
+            d3.select("#legend")
+                .selectAll("span")
+                .data(departments)
+                .join("span")
+                .attr("class", "legend-item")
+                .html(d =>
+                    `<span style="color:${colors(d)}">■</span> ${d}`
+                );
+
+        }).catch(error => {
+            console.error("Error loading CSV:", error);
+            d3.select("#chart")
+                .append("p")
+                .text("Could not load university.csv. Check the file path.");
+        });
+    </script>
+
+</body>
+</html>

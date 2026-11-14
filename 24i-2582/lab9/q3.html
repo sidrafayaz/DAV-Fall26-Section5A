@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pakistan Flight Route Network</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f5f7fa; color: #1f2937; }
+  header { padding: 16px 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  p.sub { margin: 0; font-size: 14px; color: #555; }
+  #chart { width: 100%; max-width: 1000px; margin: 0 auto; display: block; background: #fff;
+           border: 1px solid #dde3ea; border-radius: 8px; }
+  .link { stroke: #7b8794; stroke-opacity: .6; stroke-linecap: round; transition: opacity .2s, stroke .2s; }
+  .link.active { stroke: #e4572e; stroke-opacity: 1; }
+  .node circle { fill: #3b82c4; stroke: #fff; stroke-width: 2; cursor: grab; transition: opacity .2s, fill .2s; }
+  .node.active circle { fill: #e4572e; }
+  .node text { font-size: 12px; font-weight: 600; text-anchor: middle; pointer-events: none;
+               paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+  .faded { opacity: .1; }
+  .flight-label { font-size: 11px; fill: #b8401c; font-weight: 700; text-anchor: middle;
+                  paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
+  #tip { position: fixed; pointer-events: none; background: #111827; color: #fff; padding: 6px 10px;
+         border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .15s; }
+  #legend { max-width: 1000px; margin: 8px auto 24px; font-size: 13px; color: #555; padding: 0 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pakistan Flight Route Network</h1>
+  <p class="sub">Link thickness = flights per week · Node size = number of routes · Drag nodes · Hover a city to highlight its routes</p>
+</header>
+<svg id="chart" viewBox="0 0 1000 650"></svg>
+<div id="legend"></div>
+<div id="tip"></div>
+
+<script>
+const width = 1000, height = 650;
+const svg = d3.select("#chart");
+const tip = d3.select("#tip");
+
+d3.csv("flights.csv", d => ({ source: d.source.trim(), target: d.target.trim(), flights: +d.flights }))
+  .then(links => {
+
+  // 1. Build node list from the edge list
+  const names = Array.from(new Set(links.flatMap(l => [l.source, l.target])));
+  const nodes = names.map(id => ({ id, degree: 0, total: 0 }));
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  links.forEach(l => {
+    [l.source, l.target].forEach(id => { byId.get(id).degree++; byId.get(id).total += l.flights; });
+  });
+
+  // 2. Scales
+  const widthScale = d3.scaleLinear()
+    .domain(d3.extent(links, d => d.flights)).range([1.5, 14]);
+  const radiusScale = d3.scaleSqrt()
+    .domain(d3.extent(nodes, d => d.degree)).range([10, 34]);
+
+  // Simulation
+  const sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d => d.id).distance(d => 330 - widthScale(d.flights) * 12))
+    .force("charge", d3.forceManyBody().strength(-700))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide(d => radiusScale(d.degree) + 18));
+
+  const link = svg.append("g").selectAll("line").data(links).join("line")
+    .attr("class", "link")
+    .attr("stroke-width", d => widthScale(d.flights));
+
+  const linkLabel = svg.append("g").selectAll("text").data(links).join("text")
+    .attr("class", "flight-label").style("opacity", 0)
+    .text(d => d.flights);
+
+  const node = svg.append("g").selectAll("g").data(nodes).join("g").attr("class", "node")
+    .call(d3.drag()
+      .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end",   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+  node.append("circle").attr("r", d => radiusScale(d.degree));
+  node.append("text").attr("dy", d => radiusScale(d.degree) + 14).text(d => d.id);
+
+  // 5. Hover highlight
+  const isConn = (l, d) => l.source.id === d.id || l.target.id === d.id;
+  node.on("mouseover", (e, d) => {
+      const nb = new Set([d.id]);
+      links.forEach(l => { if (isConn(l, d)) { nb.add(l.source.id); nb.add(l.target.id); } });
+      link.classed("active", l => isConn(l, d)).classed("faded", l => !isConn(l, d));
+      linkLabel.style("opacity", l => isConn(l, d) ? 1 : 0);
+      node.classed("active", n => n.id === d.id).classed("faded", n => !nb.has(n.id));
+      tip.style("opacity", 1)
+         .html(`<b>${d.id}</b><br>${d.degree} routes · ${d.total} flights/week`);
+    })
+    .on("mousemove", e => tip.style("left", (e.clientX + 14) + "px").style("top", (e.clientY + 14) + "px"))
+    .on("mouseout", () => {
+      link.classed("active", false).classed("faded", false);
+      linkLabel.style("opacity", 0);
+      node.classed("active", false).classed("faded", false);
+      tip.style("opacity", 0);
+    });
+
+  sim.on("tick", () => {
+    nodes.forEach(d => {
+      const r = radiusScale(d.degree);
+      d.x = Math.max(r + 5, Math.min(width - r - 5, d.x));
+      d.y = Math.max(r + 5, Math.min(height - r - 20, d.y));
+    });
+    link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    linkLabel.attr("x", d => (d.source.x + d.target.x) / 2)
+             .attr("y", d => (d.source.y + d.target.y) / 2);
+    node.attr("transform", d => `translate(${d.x},${d.y})`);
+  });
+
+  d3.select("#legend").text(
+    `Link width scale: ${d3.min(links, d => d.flights)} to ${d3.max(links, d => d.flights)} flights/week · ` +
+    `Node radius scale: ${d3.min(nodes, d => d.degree)} to ${d3.max(nodes, d => d.degree)} routes · ${nodes.length} cities, ${links.length} routes`);
+}).catch(err => {
+  svg.append("text").attr("x", 20).attr("y", 40).attr("fill", "crimson")
+     .text("Could not load flights.csv. Run this page through Live Server, not by double-clicking.");
+  console.error(err);
+});
+</script>
+</body>
+</html>

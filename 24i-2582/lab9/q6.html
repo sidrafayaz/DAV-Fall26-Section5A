@@ -1,0 +1,81 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script><title>Combined Spatial Encoding Map</title><style>body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fa;color:#1f2937}header{padding:16px 24px}h1{margin:0 0 4px;font-size:22px}p.sub{margin:0;font-size:14px;color:#555}svg{display:block;width:100%;max-width:1000px;margin:0 auto;background:#eaf2f8;border:1px solid #dde3ea;border-radius:8px}#tip{position:fixed;pointer-events:none;background:#111827;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;opacity:0}.faded{opacity:.12}.lbl{font-size:12px;font-weight:600;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px}.legtxt{font-size:11px;fill:#333}</style></head><body>
+<header><h1>Pakistan: Cities and Flight Routes</h1><p class="sub">Position = location · Size = population · Color = hub (4+ routes) · Line width = flights per week. Hover a city to highlight its routes.</p></header>
+<svg id="map" viewBox="0 0 800 700"></svg><div id="tip"></div>
+<script>
+const GEO_FILE = "https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json"; // loaded online, no local file needed
+const W = 800, H = 700;
+const svg = d3.select("#map"), tip = d3.select("#tip");
+
+Promise.all([
+  d3.json(GEO_FILE),
+  d3.csv("pakistan_cities.csv", d => ({name: d.name.trim(), lat: +d.lat, lon: +d.lon, pop: +d.pop})),
+  d3.csv("flights.csv", d => ({source: d.source.trim(), target: d.target.trim(), flights: +d.flights}))
+]).then(([world, cities, flights]) => {
+  const projection = d3.geoMercator().center([69.5, 30.5]).scale(2700).translate([W / 2, H / 2]);
+  const path = d3.geoPath(projection);
+
+  const city = new Map(cities.map(c => {
+    const [x, y] = projection([c.lon, c.lat]);
+    return [c.name, Object.assign(c, {x, y, degree: 0})];
+  }));
+  // 1. Match routes to city coordinates
+  const routes = flights.filter(f => city.has(f.source) && city.has(f.target))
+    .map(f => ({...f, s: city.get(f.source), t: city.get(f.target)}));
+  routes.forEach(f => { f.s.degree++; f.t.degree++; });
+  cities.forEach(c => c.hub = c.degree >= 4);
+
+  const r = d3.scaleSqrt().domain([0, d3.max(cities, d => d.pop)]).range([0, 40]);
+  const w = d3.scaleLinear().domain(d3.extent(routes, d => d.flights)).range([1, 10]);
+  const HUB = "#e4572e", REG = "#3b82c4";
+
+  svg.append("g").selectAll("path").data(world.features).join("path")
+    .attr("d", path).attr("fill", "#f0ece3").attr("stroke", "#999").attr("stroke-width", 0.6);
+
+  // 2. Routes first
+  const link = svg.append("g").selectAll("line").data(routes).join("line")
+    .attr("x1", d => d.s.x).attr("y1", d => d.s.y).attr("x2", d => d.t.x).attr("y2", d => d.t.y)
+    .attr("stroke", "#4b5563").attr("stroke-opacity", .55).attr("stroke-linecap", "round")
+    .attr("stroke-width", d => w(d.flights))
+    .on("mouseover", (e, d) => tip.style("opacity", 1).html("<b>" + d.source + " – " + d.target + "</b><br>" + d.flights + " flights/week"))
+    .on("mousemove", e => tip.style("left", (e.clientX + 14) + "px").style("top", (e.clientY + 14) + "px"))
+    .on("mouseout", () => tip.style("opacity", 0));
+
+  // ...then cities on top
+  const dot = svg.append("g").selectAll("circle").data(cities).join("circle")
+    .attr("cx", d => d.x).attr("cy", d => d.y).attr("r", d => Math.max(r(d.pop), 4))
+    .attr("fill", d => d.hub ? HUB : REG).attr("fill-opacity", .7).attr("stroke", "#fff").attr("stroke-width", 1.5);
+
+  const label = svg.append("g").selectAll("text").data(cities).join("text")
+    .attr("class", "lbl").attr("x", d => d.x).attr("y", d => d.y - Math.max(r(d.pop), 4) - 5).text(d => d.name);
+
+  // 5. Hover: highlight routes of a city, dim the rest
+  const conn = (l, c) => l.s === c || l.t === c;
+  dot.on("mouseover", (e, c) => {
+      const nb = new Set([c]); routes.forEach(l => { if (conn(l, c)) { nb.add(l.s); nb.add(l.t); } });
+      link.classed("faded", l => !conn(l, c)).attr("stroke-opacity", l => conn(l, c) ? .95 : .55);
+      dot.classed("faded", d => !nb.has(d)); label.classed("faded", d => !nb.has(d));
+      tip.style("opacity", 1).html("<b>" + c.name + "</b><br>Population: " + c.pop + " million<br>Routes: " + c.degree + (c.hub ? " (hub)" : ""));
+    })
+    .on("mousemove", e => tip.style("left", (e.clientX + 14) + "px").style("top", (e.clientY + 14) + "px"))
+    .on("mouseout", () => { link.classed("faded", false).attr("stroke-opacity", .55); dot.classed("faded", false); label.classed("faded", false); tip.style("opacity", 0); });
+
+  // 4. Legend for all four encodings
+  const lg = svg.append("g").attr("transform", "translate(20,520)");
+  lg.append("rect").attr("width", 250).attr("height", 165).attr("rx", 8).attr("fill", "#fff").attr("fill-opacity", .9).attr("stroke", "#ccc");
+  const T = (x, y, s, bold) => lg.append("text").attr("class", "legtxt").attr("x", x).attr("y", y).style("font-weight", bold ? 700 : 400).text(s);
+  T(12, 20, "Position: geographic location of city", true);
+  T(12, 42, "Circle size = population", true);
+  [1, 5, 16].forEach((v, i) => {
+    lg.append("circle").attr("cx", 30 + i * 60).attr("cy", 70).attr("r", r(v)).attr("fill", "#999").attr("fill-opacity", .4).attr("stroke", "#666");
+    T(30 + i * 60 + r(v) + 3, 74, v + "M");
+  });
+  T(12, 112, "Circle color", true);
+  lg.append("circle").attr("cx", 24).attr("cy", 128).attr("r", 6).attr("fill", HUB);  T(36, 132, "Hub (4+ routes)");
+  lg.append("circle").attr("cx", 140).attr("cy", 128).attr("r", 6).attr("fill", REG); T(152, 132, "Other city");
+  T(12, 152, "Line width = flights/week:", true);
+  [10, 70].forEach((v, i) => {
+    lg.append("line").attr("x1", 160 + i * 45).attr("x2", 160 + i * 45 + 30).attr("y1", 148).attr("y2", 148).attr("stroke", "#4b5563").attr("stroke-width", w(v));
+  });
+  T(160, 164, "10"); T(205, 164, "70");
+}).catch(err => { svg.append("text").attr("x", 20).attr("y", 40).attr("fill", "crimson").text("Load error: check file names and use Live Server."); console.error(err); });
+</script></body></html>
