@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script><title>World Population Choropleth</title><style>body{font-family:system-ui,sans-serif;margin:0;background:#f5f7fa;color:#1f2937}header{padding:16px 24px}h1{margin:0 0 4px;font-size:22px}p.sub{margin:0;font-size:14px;color:#555}svg{display:block;width:100%;max-width:1000px;margin:0 auto;background:#eaf2f8;border:1px solid #dde3ea;border-radius:8px}#tip{position:fixed;pointer-events:none;background:#111827;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;opacity:0}.faded{opacity:.12}.lbl{font-size:12px;font-weight:600;text-anchor:middle;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px}.legtxt{font-size:11px;fill:#333}</style></head><body>
+<header><h1>World Population Choropleth</h1><p class="sub">Countries colored by population (millions), square-root scale. Gray = no data. Needs world.geojson and population.csv in the same folder.</p></header>
+<svg id="map" viewBox="0 0 1000 560"></svg><div id="tip"></div>
+<script>
+const GEO_FILE = "world.geojson";
+const W = 1000, H = 560;
+const svg = d3.select("#map"), tip = d3.select("#tip");
+
+Promise.all([d3.json(GEO_FILE), d3.csv("population.csv", d => ({id: d.id.trim(), country: d.country, pop: +d.population_millions}))])
+.then(([world, rows]) => {
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const codeOf = f => f.id || f.properties.iso_a3 || f.properties.ISO_A3 || f.properties["ISO3166-1-Alpha-3"] || f.properties.id;
+  const nameOf = f => f.properties.name || f.properties.NAME || f.properties.ADMIN || "Unknown";
+
+  const projection = d3.geoNaturalEarth1().fitSize([W, H - 40], world);
+  const path = d3.geoPath(projection);
+
+  const [minP, maxP] = d3.extent(rows, d => d.pop);
+  // start the ramp at 15% so the lowest values are not almost white / gray
+  const color = d3.scaleSequentialSqrt([minP, maxP], t => d3.interpolateYlOrRd(0.15 + 0.85 * t));
+
+  const hi = svg.append("path").attr("fill", "none").attr("stroke", "#111").attr("stroke-width", 2.5).attr("pointer-events", "none").style("display", "none");
+  svg.insert("g", "path").selectAll("path").data(world.features).join("path")
+    .attr("d", path)
+    .attr("fill", f => { const r = byId.get(codeOf(f)); return r ? color(r.pop) : "#d9d9d9"; })
+    .attr("stroke", "#fff").attr("stroke-width", 0.5)
+    .on("mouseover", (e, f) => {
+      // draw the highlighted border on a separate overlay so the countries are never re-ordered
+      hi.attr("d", path(f)).style("display", null);
+      const r = byId.get(codeOf(f));
+      tip.style("opacity", 1).html("<b>" + (r ? r.country : nameOf(f)) + "</b><br>" + (r ? r.pop + " million" : "No data"));
+      moveTip(e);
+    })
+    .on("mousemove", moveTip)
+    .on("mouseout", clearHover);
+
+  function moveTip(e) {
+    const x = Math.min(e.clientX + 14, window.innerWidth - 170);
+    tip.style("left", x + "px").style("top", (e.clientY + 14) + "px");
+  }
+  function clearHover() { hi.style("display", "none"); tip.style("opacity", 0); }
+  window.addEventListener("scroll", clearHover, { passive: true });
+
+  const matched = world.features.filter(f => byId.has(codeOf(f))).length;
+  console.log("Matched " + matched + " of " + rows.length + " countries");
+  svg.append("text").attr("class","legtxt").attr("x", W - 20).attr("y", H - 12).attr("text-anchor","end").text("Matched " + matched + " of " + rows.length + " countries in population.csv");
+
+  // Legend
+  const lw = 240, lx = 30, ly = H - 30;
+  const defs = svg.append("defs").append("linearGradient").attr("id", "grad");
+  d3.range(0, 1.01, 0.1).forEach(t => {
+    const v = minP + t * (maxP - minP);
+    defs.append("stop").attr("offset", t * 100 + "%").attr("stop-color", color(v));
+  });
+  // gradient stops are linear in value; sqrt color scale is applied per stop so the bar matches the map
+  svg.append("rect").attr("x", lx).attr("y", ly).attr("width", lw).attr("height", 12).attr("fill", "url(#grad)").attr("stroke", "#999");
+  svg.append("text").attr("class", "legtxt").attr("x", lx).attr("y", ly - 5).text("Population (millions)");
+  svg.append("text").attr("class", "legtxt").attr("x", lx).attr("y", ly + 26).text("Min: " + minP);
+  svg.append("text").attr("class", "legtxt").attr("x", lx + lw).attr("y", ly + 26).attr("text-anchor", "end").text("Max: " + maxP);
+  svg.append("rect").attr("x", lx + lw + 20).attr("y", ly).attr("width", 12).attr("height", 12).attr("fill", "#d9d9d9").attr("stroke", "#999");
+  svg.append("text").attr("class", "legtxt").attr("x", lx + lw + 38).attr("y", ly + 10).text("No data");
+}).catch(err => { svg.append("text").attr("x", 20).attr("y", 40).attr("fill", "crimson").text("Load error: check file names and use Live Server."); console.error(err); });
+</script></body></html>
