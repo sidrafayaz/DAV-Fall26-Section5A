@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lab 9 - Hierarchical, Network and Geospatial Visualization</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px auto; max-width: 960px; color: #222; }
+    h2 { margin-top: 40px; border-bottom: 2px solid #ddd; padding-bottom: 4px; }
+    svg { width: 100%; height: auto; border: 1px solid #eee; }
+    #tooltip { position: absolute; opacity: 0; pointer-events: none; background: #fff;
+               border: 1px solid #888; border-radius: 4px; padding: 6px 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Lab 9: Hierarchical, Network and Geospatial Visualization</h1>
+
+  <h2>Task 1: Course Enrollment Treemap</h2>
+  <svg id="t1"></svg>
+
+  <h2>Task 2: University Structure Dendrogram</h2>
+  <p>Click a department to collapse or expand its courses.</p>
+  <svg id="t2"></svg>
+
+  <h2>Task 3: Flight Route Network</h2>
+  <svg id="t3"></svg>
+
+  <h2>Task 4: World Population Choropleth</h2>
+  <svg id="t4"></svg>
+
+  <h2>Task 5: Pakistan Cities Point Map</h2>
+  <svg id="t5"></svg>
+
+  <h2>Task 6: Combined Spatial Encoding Map</h2>
+  <svg id="t6"></svg>
+
+  <div id="tooltip"></div>
+  <script src="script.js"></script>
+</body>
+</html>
