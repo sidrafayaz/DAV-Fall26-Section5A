@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 3: Flight Route Network</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Navigation header between tasks */
+    .nav-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+
+    .nav-link {
+      padding: 8px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      max-width: 1000px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Legends & Info bar */
+    .legends-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 12px 18px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .legend-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .legend-title {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+    }
+
+    .node-sample {
+      border-radius: 50%;
+      background: #2563eb;
+      display: inline-block;
+    }
+
+    .line-sample {
+      display: inline-block;
+      background: #64748b;
+      border-radius: 2px;
+    }
+
+    /* Graph Canvas */
+    #chart {
+      width: 100%;
+      position: relative;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      background-color: #fafbfc;
+      border: 1px solid var(--border);
+      cursor: grab;
+    }
+
+    svg:active {
+      cursor: grabbing;
+    }
+
+    /* Network elements */
+    .link {
+      stroke: #94a3b8;
+      stroke-opacity: 0.6;
+      stroke-linecap: round;
+      transition: stroke-opacity 0.25s, stroke 0.25s;
+    }
+
+    .link.highlighted {
+      stroke: #2563eb;
+      stroke-opacity: 1;
+    }
+
+    .link.faded {
+      stroke-opacity: 0.08;
+    }
+
+    .node {
+      cursor: pointer;
+      transition: opacity 0.25s;
+    }
+
+    .node.faded {
+      opacity: 0.2;
+    }
+
+    .node circle {
+      stroke: #ffffff;
+      stroke-width: 2.5px;
+      fill: #2563eb;
+      transition: fill 0.2s, stroke 0.2s, stroke-width 0.2s;
+    }
+
+    .node:hover circle, .node.highlighted circle {
+      stroke: #0f172a;
+      stroke-width: 3.5px;
+      fill: #1d4ed8;
+    }
+
+    .node.neighbor circle {
+      stroke: #3b82f6;
+      stroke-width: 3px;
+      fill: #3b82f6;
+    }
+
+    .node text {
+      font-size: 12px;
+      font-weight: 600;
+      fill: #0f172a;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(255,255,255,0.9), 0 -1px 3px rgba(255,255,255,0.9), 1px 0 3px rgba(255,255,255,0.9), -1px 0 3px rgba(255,255,255,0.9);
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: opacity 0.15s ease;
+      line-height: 1.5;
+      z-index: 100;
+    }
+
+    .tooltip .title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      color: #991b1b;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar for all 6 tasks -->
+  <nav class="nav-bar">
+    <a href="task1.html" class="nav-link">Task 1: Treemap</a>
+    <a href="task2.html" class="nav-link">Task 2: Dendrogram</a>
+    <a href="task3.html" class="nav-link active">Task 3: Flight Network</a>
+    <a href="task4.html" class="nav-link">Task 4: World Choropleth</a>
+    <a href="task5.html" class="nav-link">Task 5: Point Map</a>
+    <a href="task6.html" class="nav-link">Task 6: Spatial Combined</a>
+  </nav>
+
+  <div class="container">
+    <header>
+      <h1>Task 3: Flight Route Network</h1>
+      <p class="subtitle">
+        Force-directed graph of Pakistani domestic flights. Node radius encodes route degree, and link width encodes weekly flights.
+      </p>
+    </header>
+
+    <!-- Legend bar -->
+    <div class="legends-bar">
+      <!-- Node size legend -->
+      <div class="legend-group">
+        <span class="legend-title">Node Size (Routes Degree):</span>
+        <div class="legend-item">
+          <span class="node-sample" style="width: 12px; height: 12px;"></span>
+          <span>1 route</span>
+        </div>
+        <div class="legend-item">
+          <span class="node-sample" style="width: 20px; height: 20px;"></span>
+          <span>3-5 routes</span>
+        </div>
+        <div class="legend-item">
+          <span class="node-sample" style="width: 28px; height: 28px;"></span>
+          <span>7 routes (Hub)</span>
+        </div>
+      </div>
+
+      <!-- Link thickness legend -->
+      <div class="legend-group">
+        <span class="legend-title">Link Thickness:</span>
+        <div class="legend-item">
+          <span class="line-sample" style="width: 22px; height: 2px;"></span>
+          <span>6 fl/wk</span>
+        </div>
+        <div class="legend-item">
+          <span class="line-sample" style="width: 22px; height: 5px;"></span>
+          <span>25 fl/wk</span>
+        </div>
+        <div class="legend-item">
+          <span class="line-sample" style="width: 22px; height: 8px;"></span>
+          <span>70 fl/wk</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart container -->
+    <div id="chart">
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </div>
+
+  <script>
+    const width = 940;
+    const height = 580;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    const container = svg.append("g");
+    const linkGroup = container.append("g").attr("class", "links");
+    const nodeGroup = container.append("g").attr("class", "nodes");
+
+    const tooltip = d3.select("#tooltip");
+
+    d3.csv("dataset/flights.csv").then(data => {
+      // 1. Process flight links and build node degree & stats
+      const links = data.map(d => ({
+        source: d.source.trim(),
+        target: d.target.trim(),
+        flights: +d.flights
+      }));
+
+      // Gather unique node names and compute degree & total flights
+      const cityStats = {};
+      links.forEach(l => {
+        [l.source, l.target].forEach(city => {
+          if (!cityStats[city]) {
+            cityStats[city] = { name: city, degree: 0, totalFlights: 0, neighbors: new Set() };
+          }
+        });
+        cityStats[l.source].degree += 1;
+        cityStats[l.source].totalFlights += l.flights;
+        cityStats[l.source].neighbors.add(l.target);
+
+        cityStats[l.target].degree += 1;
+        cityStats[l.target].totalFlights += l.flights;
+        cityStats[l.target].neighbors.add(l.source);
+      });
+
+      const nodes = Object.values(cityStats).map(c => ({
+        id: c.name,
+        name: c.name,
+        degree: c.degree,
+        totalFlights: c.totalFlights,
+        neighbors: c.neighbors
+      }));
+
+      // Scales
+      // Requirement 2: Link thickness must represent number of flights per week
+      const linkScale = d3.scaleLinear()
+        .domain(d3.extent(links, d => d.flights))
+        .range([2, 8.5]);
+
+      // Requirement 3: Node radius represents number of routes (degree)
+      const radiusScale = d3.scaleSqrt()
+        .domain([1, d3.max(nodes, d => d.degree)])
+        .range([10, 26]);
+
+      // 2. Set up D3 Force Simulation
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(140))
+        .force("charge", d3.forceManyBody().strength(-550))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(d => radiusScale(d.degree) + 18));
+
+      // 3. Draw Links
+      const link = linkGroup.selectAll("line")
+        .data(links)
+        .enter()
+        .append("line")
+        .attr("class", "link")
+        .attr("stroke-width", d => linkScale(d.flights))
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1).html(`
+            <div class="title">${d.source.id || d.source} ↔ ${d.target.id || d.target}</div>
+            <div><strong>Frequency:</strong> ${d.flights} flights / week</div>
+          `);
+        })
+        .on("mousemove", (event) => {
+          const chartRect = document.getElementById("chart").getBoundingClientRect();
+          tooltip
+            .style("left", (event.clientX - chartRect.left + 15) + "px")
+            .style("top", (event.clientY - chartRect.top - 15) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      // 4. Draw Nodes
+      const node = nodeGroup.selectAll("g")
+        .data(nodes)
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+      // Circles for each city
+      node.append("circle")
+        .attr("r", d => radiusScale(d.degree));
+
+      // Requirement 1: Each city has its name as a label
+      node.append("text")
+        .attr("dx", d => radiusScale(d.degree) + 6)
+        .attr("dy", "0.35em")
+        .text(d => d.name);
+
+      // Requirement 5: Hovering over a city highlights its routes and fades others
+      node.on("mouseover", (event, d) => {
+        // Highlight city routes
+        link.classed("highlighted", l => l.source.id === d.id || l.target.id === d.id)
+            .classed("faded", l => !(l.source.id === d.id || l.target.id === d.id));
+
+        // Highlight neighbor cities & fade unrelated
+        node.classed("highlighted", n => n.id === d.id)
+            .classed("neighbor", n => d.neighbors.has(n.id))
+            .classed("faded", n => n.id !== d.id && !d.neighbors.has(n.id));
+
+        const directList = Array.from(d.neighbors).join(", ");
+        tooltip.style("opacity", 1).html(`
+          <div class="title">${d.name}</div>
+          <div><strong>Connected Routes:</strong> ${d.degree}</div>
+          <div><strong>Total Weekly Flights:</strong> ${d.totalFlights}</div>
+          <div><strong>Direct Destinations:</strong> ${directList}</div>
+        `);
+      })
+      .on("mousemove", (event) => {
+        const chartRect = document.getElementById("chart").getBoundingClientRect();
+        tooltip
+          .style("left", (event.clientX - chartRect.left + 15) + "px")
+          .style("top", (event.clientY - chartRect.top - 15) + "px");
+      })
+      .on("mouseout", () => {
+        link.classed("highlighted", false).classed("faded", false);
+        node.classed("highlighted", false).classed("neighbor", false).classed("faded", false);
+        tooltip.style("opacity", 0);
+      });
+
+      // Tick update
+      simulation.on("tick", () => {
+        // Constrain positions within SVG bounds
+        nodes.forEach(d => {
+          const r = radiusScale(d.degree);
+          d.x = Math.max(r + 20, Math.min(width - r - 70, d.x));
+          d.y = Math.max(r + 20, Math.min(height - r - 20, d.y));
+        });
+
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+
+        node.attr("transform", d => `translate(${d.x},${d.y})`);
+      });
+
+      // Requirement 4: Nodes must be draggable
+      function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+
+      function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+
+    }).catch(error => {
+      console.error("Error loading flights.csv:", error);
+      d3.select("#chart").append("div")
+        .attr("class", "error-msg")
+        .html(`
+          <strong>Error loading dataset:</strong> Could not load <code>dataset/flights.csv</code>.<br>
+          <em>Note: If viewing directly as a local file, browser security (CORS) prevents loading CSV files. Please run a local server (e.g. VS Code Live Server or <code>python -m http.server</code>).</em>
+        `);
+    });
+  </script>
+</body>
+</html>
+

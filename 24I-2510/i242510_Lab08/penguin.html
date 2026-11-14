@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Penguins: Lab Task 1</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .value { font-size: 12px; text-anchor: middle; }
+  </style>
+</head>
+<body>
+  <h1>Average body mass by species</h1>
+  <svg id="chart" width="600" height="400"></svg>
+
+  <script>
+    // Step 3: change metric to "flipper_length_mm"
+    // Step 4: change groupBy to "island"
+    const groupBy = "species";
+    const metric  = "body_mass_g";
+
+    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    const width = 600, height = 400;
+    const innerWidth  = width  - margin.left - margin.right;
+    const innerHeight = height - margin.top  - margin.bottom;
+
+    const svg = d3.select("#chart");
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("dataset/penguins.csv", d3.autoType).then(data => {
+      data = data.filter(d => d[metric] != null);
+
+      // one number per group: the average
+      const avg  = d3.rollup(data, v => d3.mean(v, d => d[metric]), d => d[groupBy]);
+      const rows = Array.from(avg, ([name, avgMass]) => ({ name, avgMass }));
+      const maxVal = d3.max(rows, d => d.avgMass);
+
+      const x = d3.scaleBand()
+        .domain(rows.map(d => d.name))
+        .range([0, innerWidth])
+        .padding(0.3);
+
+      const y = d3.scaleLinear()
+        .domain([0, maxVal]).nice()
+        .range([innerHeight, 0]);
+
+      g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x));
+      g.append("g").call(d3.axisLeft(y));
+
+      g.selectAll("rect").data(rows).join("rect")
+        .attr("x", d => x(d.name))
+        .attr("y", d => y(d.avgMass))
+        .attr("width", x.bandwidth())
+        .attr("height", d => innerHeight - y(d.avgMass))   // decides how tall each bar is
+        .attr("fill", d => d.avgMass === maxVal ? "red" : "steelblue");
+
+      g.selectAll(".value").data(rows).join("text")
+        .attr("class", "value")
+        .attr("x", d => x(d.name) + x.bandwidth() / 2)
+        .attr("y", d => y(d.avgMass) - 5)
+        .text(d => Math.round(d.avgMass));
+    });
+  </script>
+</body>
+</html>

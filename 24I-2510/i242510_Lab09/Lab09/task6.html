@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 6: Combined Spatial Encoding Map</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --hub-color: #e11d48;
+      --nonhub-color: #0284c7;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Navigation header between tasks */
+    .nav-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+
+    .nav-link {
+      padding: 8px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      max-width: 1000px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* 4-variable Legend Container */
+    .legend-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+      padding: 16px 18px;
+      background: #f1f5f9;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      font-size: 12.5px;
+    }
+
+    .legend-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .legend-card-title {
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+    }
+
+    .hub-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .size-dot {
+      border-radius: 50%;
+      background: #94a3b8;
+      display: inline-block;
+    }
+
+    .line-width-sample {
+      display: inline-block;
+      background: #475569;
+      border-radius: 2px;
+    }
+
+    /* Map SVG */
+    #chart {
+      width: 100%;
+      position: relative;
+    }
+
+    svg.map-svg {
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      background-color: #f8fafc;
+      border: 1px solid var(--border);
+    }
+
+    /* Map boundaries */
+    .country-bg {
+      fill: #ffffff;
+      stroke: #cbd5e1;
+      stroke-width: 0.7px;
+    }
+
+    .pakistan-boundary {
+      fill: #f1f5f9;
+      stroke: #94a3b8;
+      stroke-width: 1.2px;
+    }
+
+    /* Flight Routes (Drawn first) */
+    .route-link {
+      fill: none;
+      stroke: #64748b;
+      stroke-opacity: 0.5;
+      stroke-linecap: round;
+      cursor: pointer;
+      transition: stroke-opacity 0.25s, stroke 0.25s, stroke-width 0.25s;
+    }
+
+    .route-link.highlighted {
+      stroke: #dc2626 !important;
+      stroke-opacity: 1 !important;
+    }
+
+    .route-link.faded {
+      stroke-opacity: 0.06 !important;
+    }
+
+    /* Cities (Drawn on top) */
+    .city-group {
+      cursor: pointer;
+      transition: opacity 0.25s;
+    }
+
+    .city-group.faded {
+      opacity: 0.2;
+    }
+
+    .city-circle {
+      stroke: #ffffff;
+      stroke-width: 2px;
+      transition: stroke 0.2s, stroke-width 0.2s, transform 0.2s;
+    }
+
+    .city-group:hover .city-circle, .city-group.highlighted .city-circle {
+      stroke: #0f172a;
+      stroke-width: 3.5px;
+      transform: scale(1.15);
+    }
+
+    .city-label {
+      font-size: 11.5px;
+      font-weight: 700;
+      fill: #0f172a;
+      pointer-events: none;
+      text-shadow: 0 1px 3px rgba(255,255,255,0.95), 0 -1px 3px rgba(255,255,255,0.95), 1px 0 3px rgba(255,255,255,0.95), -1px 0 3px rgba(255,255,255,0.95);
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: opacity 0.15s ease;
+      line-height: 1.5;
+      z-index: 100;
+    }
+
+    .tooltip .title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .tooltip .hub-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      color: #991b1b;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar for all 6 tasks -->
+  <nav class="nav-bar">
+    <a href="task1.html" class="nav-link">Task 1: Treemap</a>
+    <a href="task2.html" class="nav-link">Task 2: Dendrogram</a>
+    <a href="task3.html" class="nav-link">Task 3: Flight Network</a>
+    <a href="task4.html" class="nav-link">Task 4: World Choropleth</a>
+    <a href="task5.html" class="nav-link">Task 5: Point Map</a>
+    <a href="task6.html" class="nav-link active">Task 6: Spatial Combined</a>
+  </nav>
+
+  <div class="container">
+    <header>
+      <h1>Task 6: Combined Spatial Encoding Map</h1>
+      <p class="subtitle">
+        Multi-variable spatial visualization combining geographic positions, city populations, hub classifications, and weekly flight connectivity.
+      </p>
+    </header>
+
+    <!-- Requirement 4: Legend explaining all four encodings -->
+    <div class="legend-panel">
+      <!-- 1. Position -->
+      <div class="legend-card">
+        <span class="legend-card-title">1. Position</span>
+        <div class="legend-row">
+          <span>📍 Lat/Lon Coordinates via Mercator Projection centered on Pakistan</span>
+        </div>
+      </div>
+
+      <!-- 2. Circle Size -->
+      <div class="legend-card">
+        <span class="legend-card-title">2. Circle Size (Population)</span>
+        <div class="legend-row">
+          <span class="size-dot" style="width: 8px; height: 8px;"></span>
+          <span>&lt; 1 Million</span>
+          <span class="size-dot" style="width: 16px; height: 16px; margin-left: 6px;"></span>
+          <span>~2-4M</span>
+          <span class="size-dot" style="width: 26px; height: 26px; margin-left: 6px;"></span>
+          <span>16M (Karachi)</span>
+        </div>
+      </div>
+
+      <!-- 3. Node Color -->
+      <div class="legend-card">
+        <span class="legend-card-title">3. Node Color (Hub Status)</span>
+        <div class="legend-row">
+          <span class="hub-dot" style="background: var(--hub-color);"></span>
+          <span><strong>Airline Hub</strong> (≥ 4 routes)</span>
+        </div>
+        <div class="legend-row">
+          <span class="hub-dot" style="background: var(--nonhub-color);"></span>
+          <span><strong>Non-Hub</strong> (&lt; 4 routes)</span>
+        </div>
+      </div>
+
+      <!-- 4. Line Width -->
+      <div class="legend-card">
+        <span class="legend-card-title">4. Line Width (Flights/Week)</span>
+        <div class="legend-row">
+          <span class="line-width-sample" style="width: 20px; height: 2px;"></span>
+          <span>6 fl/wk</span>
+          <span class="line-width-sample" style="width: 20px; height: 4.5px; margin-left: 8px;"></span>
+          <span>25 fl/wk</span>
+          <span class="line-width-sample" style="width: 20px; height: 7.5px; margin-left: 8px;"></span>
+          <span>70 fl/wk</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart container -->
+    <div id="chart">
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </div>
+
+  <script>
+    const width = 940;
+    const height = 620;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("class", "map-svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    // Order of layers:
+    // 1. Geographic background map
+    // 2. Flight routes (drawn FIRST per Requirement 2)
+    // 3. Cities on top (drawn SECOND per Requirement 2)
+    const mapLayer = svg.append("g").attr("class", "map-layer");
+    const routesLayer = svg.append("g").attr("class", "routes-layer");
+    const citiesLayer = svg.append("g").attr("class", "cities-layer");
+
+    const tooltip = d3.select("#tooltip");
+
+    // Load cities, flights, and world geojson
+    Promise.all([
+      d3.csv("dataset/pakistan_cities.csv"),
+      d3.csv("dataset/flights.csv"),
+      d3.json("dataset/world.geojson")
+    ]).then(([citiesData, flightsData, geoData]) => {
+      // 1. Setup Projection (Mercator centered on Pakistan)
+      const projection = d3.geoMercator()
+        .center([69.5, 30.2])
+        .scale(2100)
+        .translate([width / 2, height / 2]);
+
+      const pathGenerator = d3.geoPath().projection(projection);
+
+      // Draw map background
+      mapLayer.selectAll("path.country")
+        .data(geoData.features)
+        .enter()
+        .append("path")
+        .attr("class", d => (d.id === "PAK" || d.properties?.name === "Pakistan") ? "pakistan-boundary" : "country-bg")
+        .attr("d", pathGenerator);
+
+      // 2. Process Cities Data
+      const cityMap = new Map();
+      citiesData.forEach(d => {
+        d.lat = +d.lat;
+        d.lon = +d.lon;
+        d.pop = +d.pop;
+        d.routesCount = 0;
+        d.connectedFlights = 0;
+        d.connectedRoutes = [];
+        cityMap.set(d.name.trim(), d);
+      });
+
+      // 3. Process Flights Data & Calculate Hub Status
+      const routes = [];
+      flightsData.forEach(f => {
+        const sourceName = f.source.trim();
+        const targetName = f.target.trim();
+        const flightsCount = +f.flights;
+
+        const sourceCity = cityMap.get(sourceName);
+        const targetCity = cityMap.get(targetName);
+
+        if (sourceCity && targetCity) {
+          sourceCity.routesCount += 1;
+          sourceCity.connectedFlights += flightsCount;
+          sourceCity.connectedRoutes.push({ to: targetName, flights: flightsCount });
+
+          targetCity.routesCount += 1;
+          targetCity.connectedFlights += flightsCount;
+          targetCity.connectedRoutes.push({ to: sourceName, flights: flightsCount });
+
+          // Requirement 1: Match each route's source and target to city coordinates
+          routes.push({
+            source: sourceName,
+            target: targetName,
+            flights: flightsCount,
+            sourceCoords: projection([sourceCity.lon, sourceCity.lat]),
+            targetCoords: projection([targetCity.lon, targetCity.lat])
+          });
+        }
+      });
+
+      // Hub classification: 4 or more routes
+      citiesData.forEach(c => {
+        c.isHub = c.routesCount >= 4;
+      });
+
+      // 4. Scales
+      // Circle size represents population (Square-root scale for area proportionality)
+      const maxPop = d3.max(citiesData, d => d.pop) || 16.0;
+      const sizeScale = d3.scaleSqrt()
+        .domain([0, maxPop])
+        .range([5, 27]);
+
+      // Line width represents flights per week
+      const flightExtent = d3.extent(routes, d => d.flights);
+      const lineWidthScale = d3.scaleLinear()
+        .domain(flightExtent)
+        .range([1.5, 7.5]);
+
+      // Requirement 2: DRAW ROUTES FIRST
+      // Curved slight arc between cities for visual elegance
+      function arcPath(d) {
+        const [x1, y1] = d.sourceCoords;
+        const [x2, y2] = d.targetCoords;
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dr = Math.sqrt(dx * dx + dy * dy) * 1.3; // subtle curve
+        return `M${x1},${y1}A${dr},${dr} 0 0,1 ${x2},${y2}`;
+      }
+
+      const routeElements = routesLayer.selectAll("path.route-link")
+        .data(routes)
+        .enter()
+        .append("path")
+        .attr("class", "route-link")
+        .attr("d", arcPath)
+        .attr("stroke-width", d => lineWidthScale(d.flights))
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1).html(`
+            <div class="title">${d.source} ↔ ${d.target}</div>
+            <div><strong>Frequency:</strong> ${d.flights} flights / week</div>
+          `);
+        })
+        .on("mousemove", (event) => {
+          const chartRect = document.getElementById("chart").getBoundingClientRect();
+          tooltip
+            .style("left", (event.clientX - chartRect.left + 15) + "px")
+            .style("top", (event.clientY - chartRect.top - 15) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      // Requirement 2: DRAW CITIES ON TOP
+      const cityElements = citiesLayer.selectAll("g.city-group")
+        .data(citiesData)
+        .enter()
+        .append("g")
+        .attr("class", "city-group")
+        .attr("transform", d => {
+          const coords = projection([d.lon, d.lat]);
+          return `translate(${coords[0]},${coords[1]})`;
+        });
+
+      // Requirement 3:
+      // Position = location
+      // Circle size = population
+      // Color = hub (4 or more routes) or not
+      cityElements.append("circle")
+        .attr("class", "city-circle")
+        .attr("r", d => sizeScale(d.pop))
+        .attr("fill", d => d.isHub ? "var(--hub-color)" : "var(--nonhub-color)");
+
+      // City labels
+      cityElements.append("text")
+        .attr("class", "city-label")
+        .attr("dx", d => sizeScale(d.pop) + 5)
+        .attr("dy", "0.35em")
+        .text(d => d.name);
+
+      // Requirement 5: Hovering over a city highlights its routes and dims the rest
+      cityElements.on("mouseover", (event, d) => {
+        // Highlight routes connected to this city
+        routeElements
+          .classed("highlighted", r => r.source === d.name || r.target === d.name)
+          .classed("faded", r => r.source !== d.name && r.target !== d.name);
+
+        // Highlight connected cities, dim others
+        const connectedCityNames = new Set(d.connectedRoutes.map(r => r.to));
+        connectedCityNames.add(d.name);
+
+        cityElements
+          .classed("highlighted", c => c.name === d.name)
+          .classed("faded", c => !connectedCityNames.has(c.name));
+
+        const hubBadge = d.isHub
+          ? `<span class="hub-badge" style="background: var(--hub-color);">Airline Hub (≥4 Routes)</span>`
+          : `<span class="hub-badge" style="background: var(--nonhub-color);">Regional City (&lt;4 Routes)</span>`;
+
+        let routesSummary = d.connectedRoutes
+          .map(r => `${r.to} (${r.flights}/wk)`)
+          .join(", ") || "None";
+
+        tooltip.style("opacity", 1).html(`
+          <div class="title">${d.name}</div>
+          ${hubBadge}
+          <div><strong>Population:</strong> ${d.pop} million</div>
+          <div><strong>Routes (Degree):</strong> ${d.routesCount}</div>
+          <div><strong>Total Weekly Flights:</strong> ${d.connectedFlights}</div>
+          <div style="margin-top: 3px; font-size: 11px;"><strong>Destinations:</strong> ${routesSummary}</div>
+        `);
+      })
+      .on("mousemove", (event) => {
+        const chartRect = document.getElementById("chart").getBoundingClientRect();
+        tooltip
+          .style("left", (event.clientX - chartRect.left + 15) + "px")
+          .style("top", (event.clientY - chartRect.top - 15) + "px");
+      })
+      .on("mouseout", () => {
+        routeElements.classed("highlighted", false).classed("faded", false);
+        cityElements.classed("highlighted", false).classed("faded", false);
+        tooltip.style("opacity", 0);
+      });
+
+    }).catch(error => {
+      console.error("Error loading data:", error);
+      d3.select("#chart").append("div")
+        .attr("class", "error-msg")
+        .html(`
+          <strong>Error loading datasets:</strong> Could not load data files.<br>
+          <em>Note: If viewing directly as a local file, browser security (CORS) blocks file requests. Please run a local server (e.g. VS Code Live Server or <code>python -m http.server</code>).</em>
+        `);
+    });
+  </script>
+</body>
+</html>
+

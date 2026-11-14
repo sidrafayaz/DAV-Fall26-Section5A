@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 1: Course Enrollment Treemap</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Navigation header between tasks */
+    .nav-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+
+    .nav-link {
+      padding: 8px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      max-width: 1000px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Legend styles */
+    .legend-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding: 12px 16px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #334155;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+    }
+
+    /* Treemap visual styles */
+    #chart {
+      width: 100%;
+      position: relative;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      overflow: hidden;
+      border-radius: 8px;
+      background-color: #fafbfc;
+      border: 1px solid var(--border);
+    }
+
+    .dept-group {
+      fill: none;
+      stroke: #cbd5e1;
+      stroke-width: 1.5px;
+    }
+
+    .dept-header {
+      font-size: 13px;
+      font-weight: 700;
+      fill: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cell rect {
+      cursor: pointer;
+      transition: opacity 0.2s ease, stroke-width 0.2s ease;
+      stroke: #ffffff;
+      stroke-width: 1.5px;
+      rx: 4px;
+      ry: 4px;
+    }
+
+    .cell:hover rect {
+      opacity: 0.88;
+      stroke: #0f172a;
+      stroke-width: 2px;
+    }
+
+    .cell text {
+      pointer-events: none;
+      fill: #ffffff;
+      font-weight: 600;
+    }
+
+    .course-title {
+      font-size: 13px;
+    }
+
+    .course-count {
+      font-size: 11px;
+      opacity: 0.9;
+      font-weight: 500;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: opacity 0.15s ease;
+      line-height: 1.5;
+      z-index: 100;
+    }
+
+    .tooltip .title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      color: #991b1b;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar for all 6 tasks -->
+  <nav class="nav-bar">
+    <a href="task1.html" class="nav-link active">Task 1: Treemap</a>
+    <a href="task2.html" class="nav-link">Task 2: Dendrogram</a>
+    <a href="task3.html" class="nav-link">Task 3: Flight Network</a>
+    <a href="task4.html" class="nav-link">Task 4: World Choropleth</a>
+    <a href="task5.html" class="nav-link">Task 5: Point Map</a>
+    <a href="task6.html" class="nav-link">Task 6: Spatial Combined</a>
+  </nav>
+
+  <div class="container">
+    <header>
+      <h1>Task 1: Course Enrollment Treemap</h1>
+      <p class="subtitle">
+        Hierarchical representation (University → Department → Course) where rectangle area represents student enrollment.
+      </p>
+    </header>
+
+    <!-- Legend -->
+    <div class="legend-container" id="legend"></div>
+
+    <!-- Chart container -->
+    <div id="chart">
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </div>
+
+  <script>
+    const width = 940;
+    const height = 560;
+
+    // Department color palette
+    const deptColors = {
+      "Computer Science": "#2563eb", // Vibrant Blue
+      "Engineering": "#059669",      // Emerald Green
+      "Business": "#d97706",         // Warm Amber
+      "Sciences": "#7c3aed"          // Purple
+    };
+
+    // Build legend
+    const legendContainer = d3.select("#legend");
+    Object.entries(deptColors).forEach(([dept, color]) => {
+      const item = legendContainer.append("div").attr("class", "legend-item");
+      item.append("div")
+        .attr("class", "legend-color")
+        .style("background-color", color);
+      item.append("span").text(dept);
+    });
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    const tooltip = d3.select("#tooltip");
+
+    // Load CSV data
+    d3.csv("dataset/university.csv").then(data => {
+      // Parse numeric enrollment values
+      data.forEach(d => {
+        d.students = +d.students;
+      });
+
+      // Group into hierarchy: Root -> Department -> Courses
+      const groupedData = d3.group(data, d => d.department);
+      const rootData = {
+        name: "University",
+        children: Array.from(groupedData, ([dept, courses]) => ({
+          name: dept,
+          children: courses.map(c => ({
+            name: c.course,
+            department: c.department,
+            students: c.students
+          }))
+        }))
+      };
+
+      // Construct D3 hierarchy & compute sum
+      const root = d3.hierarchy(rootData)
+        .sum(d => d.students)
+        .sort((a, b) => b.value - a.value);
+
+      // Treemap layout with top padding for department headers
+      d3.treemap()
+        .size([width, height])
+        .paddingTop(28)
+        .paddingInner(4)
+        .paddingOuter(4)
+        .round(true)
+        (root);
+
+      // 1. Draw Department Group Backgrounds & Headers (depth = 1)
+      const departments = svg.selectAll(".dept-group-container")
+        .data(root.children)
+        .enter()
+        .append("g")
+        .attr("class", "dept-group-container");
+
+      departments.append("rect")
+        .attr("class", "dept-group")
+        .attr("x", d => d.x0)
+        .attr("y", d => d.y0)
+        .attr("width", d => Math.max(0, d.x1 - d.x0))
+        .attr("height", d => Math.max(0, d.y1 - d.y0))
+        .attr("rx", 6)
+        .attr("ry", 6);
+
+      departments.append("text")
+        .attr("class", "dept-header")
+        .attr("x", d => d.x0 + 8)
+        .attr("y", d => d.y0 + 19)
+        .text(d => `${d.data.name} (Total: ${d.value} students)`);
+
+      // 2. Draw Course Leaves (depth = 2)
+      const cells = svg.selectAll(".cell")
+        .data(root.leaves())
+        .enter()
+        .append("g")
+        .attr("class", "cell")
+        .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+      cells.append("rect")
+        .attr("width", d => Math.max(0, d.x1 - d.x0))
+        .attr("height", d => Math.max(0, d.y1 - d.y0))
+        .attr("fill", d => deptColors[d.data.department] || "#64748b")
+        .on("mouseover", (event, d) => {
+          tooltip.style("opacity", 1)
+            .html(`
+              <div class="title">${d.data.name}</div>
+              <div><strong>Department:</strong> ${d.data.department}</div>
+              <div><strong>Enrolled Students:</strong> ${d.data.students}</div>
+              <div><strong>Dept Share:</strong> ${((d.data.students / d.parent.value) * 100).toFixed(1)}%</div>
+            `);
+        })
+        .on("mousemove", (event) => {
+          const chartRect = document.getElementById("chart").getBoundingClientRect();
+          tooltip
+            .style("left", (event.clientX - chartRect.left + 15) + "px")
+            .style("top", (event.clientY - chartRect.top - 15) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      // 3. Add Course Name & Student Count Labels inside rectangles
+      cells.each(function(d) {
+        const boxWidth = d.x1 - d.x0;
+        const boxHeight = d.y1 - d.y0;
+        const g = d3.select(this);
+
+        // Only draw text if rectangle has adequate space
+        if (boxWidth > 45 && boxHeight > 30) {
+          const text = g.append("text")
+            .attr("x", 8)
+            .attr("y", 18);
+
+          // Course title (truncate if necessary)
+          let title = d.data.name;
+          if (boxWidth < 90 && title.length > 10) {
+            title = title.substring(0, 8) + "..";
+          }
+
+          text.append("tspan")
+            .attr("class", "course-title")
+            .text(title);
+
+          if (boxHeight > 45) {
+            text.append("tspan")
+              .attr("class", "course-count")
+              .attr("x", 8)
+              .attr("dy", "16")
+              .text(`${d.data.students} students`);
+          }
+        }
+      });
+
+    }).catch(error => {
+      console.error("Error loading university.csv:", error);
+      d3.select("#chart").append("div")
+        .attr("class", "error-msg")
+        .html(`
+          <strong>Error loading dataset:</strong> Could not load <code>dataset/university.csv</code>.<br>
+          <em>Note: If viewing directly as a local file, browser security (CORS) prevents loading CSV files. Please run a local server (e.g. VS Code Live Server or <code>python -m http.server</code>).</em>
+        `);
+    });
+  </script>
+</body>
+</html>
+

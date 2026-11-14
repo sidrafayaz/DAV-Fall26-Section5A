@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task 2: University Structure Dendrogram</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    /* Navigation header between tasks */
+    .nav-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+      justify-content: center;
+      max-width: 1000px;
+      width: 100%;
+    }
+
+    .nav-link {
+      padding: 8px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .nav-link.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      max-width: 1000px;
+      width: 100%;
+      padding: 28px;
+    }
+
+    header {
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Legend & Controls */
+    .controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 12px 16px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+
+    .legend-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #334155;
+    }
+
+    .legend-node {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+    }
+
+    .help-hint {
+      font-size: 12px;
+      color: #475569;
+      font-style: italic;
+    }
+
+    /* Diagram visual styles */
+    #chart {
+      width: 100%;
+      position: relative;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      overflow: visible;
+      border-radius: 8px;
+      background-color: #fafbfc;
+      border: 1px solid var(--border);
+    }
+
+    .link {
+      fill: none;
+      stroke: #cbd5e1;
+      stroke-width: 1.8px;
+      transition: stroke 0.2s, stroke-width 0.2s;
+    }
+
+    .link:hover {
+      stroke: #94a3b8;
+      stroke-width: 2.5px;
+    }
+
+    .node circle {
+      stroke: #ffffff;
+      stroke-width: 2.5px;
+      transition: all 0.2s ease;
+    }
+
+    .node.clickable {
+      cursor: pointer;
+    }
+
+    .node.clickable:hover circle {
+      stroke: #0f172a;
+      stroke-width: 3px;
+      transform: scale(1.15);
+    }
+
+    .node text {
+      font-size: 12.5px;
+      font-weight: 500;
+      fill: #1e293b;
+      user-select: none;
+    }
+
+    .node.parent text {
+      font-weight: 700;
+    }
+
+    /* Tooltip */
+    .tooltip {
+      position: absolute;
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border-radius: 8px;
+      font-size: 12px;
+      pointer-events: none;
+      opacity: 0;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      transition: opacity 0.15s ease;
+      line-height: 1.5;
+      z-index: 100;
+    }
+
+    .tooltip .title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .error-msg {
+      padding: 16px;
+      background: #fef2f2;
+      border: 1px solid #f87171;
+      color: #991b1b;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation bar for all 6 tasks -->
+  <nav class="nav-bar">
+    <a href="task1.html" class="nav-link">Task 1: Treemap</a>
+    <a href="task2.html" class="nav-link active">Task 2: Dendrogram</a>
+    <a href="task3.html" class="nav-link">Task 3: Flight Network</a>
+    <a href="task4.html" class="nav-link">Task 4: World Choropleth</a>
+    <a href="task5.html" class="nav-link">Task 5: Point Map</a>
+    <a href="task6.html" class="nav-link">Task 6: Spatial Combined</a>
+  </nav>
+
+  <div class="container">
+    <header>
+      <h1>Task 2: University Structure Dendrogram</h1>
+      <p class="subtitle">
+        Horizontal hierarchical tree (University → Departments → Courses) with curved links and collapsible branches.
+      </p>
+    </header>
+
+    <!-- Legend and Interaction hint -->
+    <div class="controls-bar">
+      <div class="legend-container">
+        <div class="legend-item">
+          <div class="legend-node" style="background-color: #0f172a;"></div>
+          <span>Root (University)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-node" style="background-color: #2563eb;"></div>
+          <span>Department (Click to toggle)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-node" style="background-color: #10b981;"></div>
+          <span>Course (Leaf)</span>
+        </div>
+      </div>
+      <div class="help-hint">Tip: Click any department circle to collapse or expand its courses</div>
+    </div>
+
+    <!-- Chart container -->
+    <div id="chart">
+      <div id="tooltip" class="tooltip"></div>
+    </div>
+  </div>
+
+  <script>
+    const width = 940;
+    const height = 580;
+    const margin = { top: 30, right: 180, bottom: 30, left: 110 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+      .append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const gLink = g.append("g").attr("class", "links");
+    const gNode = g.append("g").attr("class", "nodes");
+
+    const tooltip = d3.select("#tooltip");
+
+    // Depth color mapping
+    const depthColors = {
+      0: "#0f172a", // Root: Dark slate
+      1: "#2563eb", // Department: Bright blue
+      2: "#10b981"  // Course: Emerald green
+    };
+
+    const depthRadius = {
+      0: 9,
+      1: 8,
+      2: 6
+    };
+
+    let i = 0;
+    let root;
+    let cluster;
+
+    d3.csv("dataset/university.csv").then(data => {
+      data.forEach(d => {
+        d.students = +d.students;
+      });
+
+      // Group data into hierarchy
+      const groupedData = d3.group(data, d => d.department);
+      const rootData = {
+        name: "University",
+        children: Array.from(groupedData, ([dept, courses]) => ({
+          name: dept,
+          department: dept,
+          children: courses.map(c => ({
+            name: c.course,
+            department: c.department,
+            students: c.students
+          }))
+        }))
+      };
+
+      // Create tree hierarchy and compute sum of students
+      root = d3.hierarchy(rootData);
+      root.x0 = innerHeight / 2;
+      root.y0 = 0;
+
+      // Compute total students per department & university
+      root.sum(d => d.students || 0);
+
+      // Create cluster (dendrogram) layout
+      cluster = d3.cluster().size([innerHeight, innerWidth]);
+
+      // Initial update
+      update(root);
+
+    }).catch(error => {
+      console.error("Error loading university.csv:", error);
+      d3.select("#chart").append("div")
+        .attr("class", "error-msg")
+        .html(`
+          <strong>Error loading dataset:</strong> Could not load <code>dataset/university.csv</code>.<br>
+          <em>Note: If viewing directly as a local file, browser security (CORS) prevents loading CSV files. Please run a local server (e.g. VS Code Live Server or <code>python -m http.server</code>).</em>
+        `);
+    });
+
+    function update(source) {
+      const duration = 450;
+
+      // Compute dendrogram layout
+      cluster(root);
+
+      const nodes = root.descendants();
+      const links = root.links();
+
+      // Normalize for fixed-depth spacing
+      nodes.forEach(d => {
+        d.y = d.depth * (innerWidth / 2);
+      });
+
+      /* ----------------------------------------------------
+         1. NODES SELECTION & JOIN
+      ---------------------------------------------------- */
+      const node = gNode.selectAll("g.node")
+        .data(nodes, d => d.id || (d.id = ++i));
+
+      // Enter new nodes at parent's previous position
+      const nodeEnter = node.enter()
+        .append("g")
+        .attr("class", d => `node ${d.depth === 1 ? 'clickable' : ''} ${d.children || d._children ? 'parent' : 'leaf'}`)
+        .attr("transform", d => `translate(${source.y0},${source.x0})`)
+        .on("click", (event, d) => {
+          // Extension: Clicking department collapses or expands its courses
+          if (d.depth === 1) {
+            if (d.children) {
+              d._children = d.children;
+              d.children = null;
+            } else {
+              d.children = d._children;
+              d._children = null;
+            }
+            update(d);
+          }
+        })
+        .on("mouseover", (event, d) => {
+          let typeLabel = "Root";
+          if (d.depth === 1) typeLabel = "Department";
+          if (d.depth === 2) typeLabel = "Course";
+
+          let html = `<div class="title">${d.data.name}</div><div><strong>Level:</strong> ${typeLabel}</div>`;
+          if (d.data.students) {
+            html += `<div><strong>Enrollment:</strong> ${d.data.students} students</div>`;
+          } else if (d.value) {
+            html += `<div><strong>Total Enrollment:</strong> ${d.value} students</div>`;
+          }
+          if (d.depth === 1) {
+            const count = (d.children ? d.children.length : (d._children ? d._children.length : 0));
+            html += `<div><strong>Courses:</strong> ${count} (Click to toggle)</div>`;
+          }
+
+          tooltip.style("opacity", 1).html(html);
+        })
+        .on("mousemove", (event) => {
+          const chartRect = document.getElementById("chart").getBoundingClientRect();
+          tooltip
+            .style("left", (event.clientX - chartRect.left + 15) + "px")
+            .style("top", (event.clientY - chartRect.top - 15) + "px");
+        })
+        .on("mouseout", () => {
+          tooltip.style("opacity", 0);
+        });
+
+      // Node circles
+      nodeEnter.append("circle")
+        .attr("r", 1e-6)
+        .attr("fill", d => depthColors[d.depth])
+        .attr("stroke-dasharray", d => d._children ? "2 2" : "none");
+
+      // Requirement 2: Place labels so they do not overlap links
+      // Leaf labels on the right (text-anchor: start), Parent labels on the left (text-anchor: end)
+      nodeEnter.append("text")
+        .attr("dy", "0.32em")
+        .attr("x", d => (d.children || d._children) ? -12 : 12)
+        .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
+        .text(d => d.data.name)
+        .style("fill-opacity", 1e-6);
+
+      // Transition nodes to new positions
+      const nodeUpdate = node.merge(nodeEnter).transition().duration(duration)
+        .attr("transform", d => `translate(${d.y},${d.x})`);
+
+      nodeUpdate.select("circle")
+        .attr("r", d => depthRadius[d.depth] || 6)
+        .attr("fill", d => depthColors[d.depth])
+        .attr("stroke", d => d._children ? "#0f172a" : "#ffffff")
+        .attr("stroke-width", d => d._children ? 3 : 2.5);
+
+      nodeUpdate.select("text")
+        .attr("x", d => (d.children || d._children) ? -12 : 12)
+        .attr("text-anchor", d => (d.children || d._children) ? "end" : "start")
+        .style("fill-opacity", 1);
+
+      // Transition exiting nodes to parent's new position
+      const nodeExit = node.exit().transition().duration(duration)
+        .attr("transform", d => `translate(${source.y},${source.x})`)
+        .remove();
+
+      nodeExit.select("circle").attr("r", 1e-6);
+      nodeExit.select("text").style("fill-opacity", 1e-6);
+
+      /* ----------------------------------------------------
+         2. LINKS SELECTION & JOIN (Curved horizontal links)
+      ---------------------------------------------------- */
+      const diagonal = d3.linkHorizontal()
+        .x(d => d.y)
+        .y(d => d.x);
+
+      const link = gLink.selectAll("path.link")
+        .data(links, d => d.target.id);
+
+      // Enter links at parent's previous position
+      const linkEnter = link.enter().insert("path", "g")
+        .attr("class", "link")
+        .attr("d", d => {
+          const o = { x: source.x0, y: source.y0 };
+          return diagonal({ source: o, target: o });
+        });
+
+      // Transition links to current position
+      link.merge(linkEnter).transition().duration(duration)
+        .attr("d", diagonal);
+
+      // Transition exiting links to parent's new position
+      link.exit().transition().duration(duration)
+        .attr("d", d => {
+          const o = { x: source.x, y: source.y };
+          return diagonal({ source: o, target: o });
+        })
+        .remove();
+
+      // Stash current positions for transitions
+      nodes.forEach(d => {
+        d.x0 = d.x;
+        d.y0 = d.y;
+      });
+    }
+  </script>
+</body>
+</html>
+
